@@ -1,0 +1,12 @@
+name = "lume-ai"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+
+[vars]
+# Set this to the current vision-capable model you want to use.
+OPENAI_MODEL = "REPLACE_WITH_MODEL"
+# For GitHub Pages, use the exact app origin, e.g. https://username.github.io
+ALLOWED_ORIGIN = "https://REPLACE_WITH_GITHUB_PAGES_ORIGIN"
+
+# Add the key securely with:
+# npx wrangler secret put OPENAI_API_KEY
