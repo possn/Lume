@@ -25,3 +25,15 @@ body{min-height:100vh}button,input,textarea,select{font:inherit}button{cursor:po
 /* v0.7 Cook & Learn */
 .memory-note{margin:10px 0 2px;padding:9px 11px;border-radius:13px;background:#F2F0EB;color:#706B64;font-size:11px;line-height:1.35}.current-meal{display:flex;align-items:center;justify-content:space-between;gap:16px;border-color:#CFC3B9;background:#F8F3EF}.current-meal>div{min-width:0}.chosen-banner{margin-top:14px;padding:11px 13px;border-radius:14px;background:#EEF1EC;color:#526258;font-size:12px;font-weight:650}.detail-image{width:calc(100% + 6px);max-height:320px;object-fit:cover;border-radius:22px;margin:-5px -3px 20px;box-shadow:var(--shadow)}.section-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.match-badge{font-size:10px;background:#EEF1EC;color:#59675D;border-radius:999px;padding:6px 9px;white-space:nowrap}.ingredients li.have{color:#44554A}.ingredients li i{font-style:normal;color:#718174}.steps{list-style:none;padding:0;margin:13px 0 0;counter-reset:none}.steps li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;margin:13px 0;padding:0}.step-n{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#EEEAE4;color:#625D56;font-size:11px;font-weight:700}.sticky-action{position:sticky;bottom:90px;z-index:8;margin-top:12px}.feedback button.selected{background:#292825;color:#fff;border-color:#292825}.feedback button.selected small{color:#DDD8D0}.audience-feedback{margin-top:17px;padding-top:16px;border-top:1px solid var(--line)}.audience-feedback>p{font-size:12px;font-weight:650;margin:0 0 9px}.audience-feedback .choice{min-height:64px}.audience-feedback .primary{margin-top:12px}.dinner-feedback{border-color:#D4C9BF}
 @media(max-width:520px){.section-head{display:block}.match-badge{display:inline-block;margin-top:8px}.detail-image{max-height:240px}}
+
+/* v0.10 Complete Meal Composer */
+.meal-composer{border-color:#D7D3C8;background:linear-gradient(180deg,rgba(248,249,245,.96),rgba(252,251,248,.96))}.meal-side-ingredients{margin-top:14px}.compact-steps{margin-top:16px}.recipe-card .sub{min-height:2.8em}
+
+/* v0.11 — Use What You Have */
+.use-home-badge{background:rgba(74,112,63,.11)!important;border-color:rgba(74,112,63,.16)!important;font-weight:750}
+.home-use-card h3{margin:5px 0 7px}
+
+/* v0.12 — Smart Adaptation Engine */
+.adapt-home-badge{background:rgba(167,93,71,.10)!important;border-color:rgba(167,93,71,.18)!important;color:#83503f;font-weight:750}
+.smart-adaptation{border-color:#C8D1C6;background:linear-gradient(180deg,rgba(245,249,244,.98),rgba(252,251,248,.98))}
+.adaptation-swaps{display:grid;gap:8px;margin-top:16px}.swap-row{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);gap:8px;align-items:center;padding:11px 12px;border:1px solid #DDE4DB;border-radius:14px;background:rgba(255,255,255,.65);font-size:13px}.swap-row span{color:var(--muted);text-decoration:line-through}.swap-row b{text-align:center;color:var(--sage)}.swap-row strong{font-weight:700;color:#455449}.adapted-steps-title{margin-top:20px}.original-recipe{border-style:dashed}
