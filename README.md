@@ -1,5 +1,25 @@
-# Lume v0.12.0 — Smart Adaptation
+# Lume v0.13.0 — Identity
 
+
+## v0.13.0 — Identity
+- Novo splash de abertura curto (≈1,5 s), sem som.
+- Usa o símbolo interno do Lume: bloco escuro com o pequeno sorriso coral.
+- O sorriso desenha-se de forma subtil e o nome Lume aparece logo depois.
+- O splash desaparece sozinho e nunca bloqueia a navegação.
+- Respeita `prefers-reduced-motion`.
+- Ícones da PWA (180/192/512) passam a usar a mesma identidade visual do sorriso, eliminando a inconsistência entre o ícone instalado e a marca dentro da app.
+
+### Ficheiros a substituir a partir da v0.12.0
+- `index.html`
+- `styles.css`
+- `app.js`
+- `config.js`
+- `sw.js`
+- `manifest.webmanifest`
+- `icons/icon-180.png`
+- `icons/icon-192.png`
+- `icons/icon-512.png`
+- `README.md`
 
 PWA mobile-first para decidir refeições familiares para 5 pessoas.
 

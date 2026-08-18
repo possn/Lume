@@ -444,5 +444,13 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
 $('#installBtn').onclick=async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;$('#installBtn').classList.add('hidden')};
 
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+
+// v0.13 — short visual identity moment on launch. No sound.
+const splash=$('#splash');
+if(splash){
+  const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  window.setTimeout(()=>splash.classList.add('hide'),reduceMotion?650:1450);
+  window.setTimeout(()=>splash.remove(),reduceMotion?1100:2000);
+}
 render();
 setAIStatus(navigator.onLine&&window.LumeRetrieval?'retrieval':(window.LumeAI?.isConfigured()?'online':'local'));

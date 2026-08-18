@@ -1,7 +1,7 @@
 {
   "name": "Lume — O jantar, resolvido.",
   "short_name": "Lume",
-  "description": "Três ideias de jantar para a família, a partir do que existe em casa.",
+  "description": "Cinco ideias de jantar para a família, a partir do que existe em casa.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
