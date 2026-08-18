@@ -323,13 +323,13 @@ function render(){
 
 function renderToday(){
   app.innerHTML=`
-    <section class="hero"><div class="eyebrow">Jantar para cinco</div><h1>O que temos para o jantar?</h1><p class="sub">Diz-me o que há. O Lume transforma isso em cinco refeições completas, práticas e pensadas para a família.</p></section>
+    <section class="hero home-hero"><div class="eyebrow">Hoje cozinhamos?</div><h1>O que há para o jantar?</h1><p class="sub">Diz-me o que tens em casa. O Lume encontra cinco boas ideias para pôr toda a gente à mesa.</p></section>
     ${state.currentMeal?`<section class="card current-meal"><div><div class="eyebrow">Escolhida para hoje</div><h3>${esc(state.currentMeal.recipe.name)}</h3><p class="sub">${esc(state.currentMeal.recipe.side)}</p></div><button id="resumeMeal" class="primary small">Abrir</button></section>`:''}
     <section class="card">
       <label class="label">Proteína principal</label>
       <input id="protein" class="field" placeholder="Ex.: bifes de peru, salmão, frango…" value="${esc(state.protein)}" />
       <div class="chips" style="margin-top:10px">
-        ${['Bifes de peru','Frango','Salmão','Carne picada','Ovos'].map(x=>`<button class="chip quick-protein">${x}</button>`).join('')}
+        ${[['Bifes de peru','🥩 Bifes de peru'],['Frango','🍗 Frango'],['Salmão','🐟 Salmão'],['Carne picada','🍝 Carne picada'],['Ovos','🍳 Ovos']].map(([v,l])=>`<button class="chip quick-protein" data-protein="${v}">${l}</button>`).join('')}
       </div>
       <label class="label">O que mais existe em casa? <span style="font-weight:500;color:var(--muted)">(opcional)</span></label>
       <textarea id="ingredients" class="field" placeholder="Ex.: courgette, arroz, tomate, iogurte…">${esc(state.ingredients)}</textarea>
@@ -337,11 +337,11 @@ function renderToday(){
       <div class="chips" id="timeChips">${[15,30,45,60].map(t=>`<button class="chip ${state.time===t?'active':''}" data-time="${t}">${t===60?'Sem pressa':t+' min'}</button>`).join('')}</div>
       <label class="label">Hoje quero</label>
       <div class="grid">
-        <button class="choice ${state.effort==='simple'?'selected':''}" data-effort="simple"><b>Simples</b><small>Poucos passos, pouca loiça</small></button>
-        <button class="choice ${state.effort==='normal'?'selected':''}" data-effort="normal"><b>Normal</b><small>Posso cozinhar um pouco mais</small></button>
+        <button class="choice ${state.effort==='simple'?'selected':''}" data-effort="simple"><b>⚡ Simples</b><small>Poucos passos, pouca loiça</small></button>
+        <button class="choice ${state.effort==='normal'?'selected':''}" data-effort="normal"><b>🍳 Normal</b><small>Posso cozinhar um pouco mais</small></button>
       </div>
       <label class="label">Como queres cozinhar?</label>
-      <div class="chips">${[['any','Tanto faz'],['pan','Frigideira'],['oven','Forno'],['grill','Grelhador'],['airfryer','Air fryer']].map(([v,l])=>`<button class="chip ${state.method===v?'active':''}" data-method="${v}">${l}</button>`).join('')}</div>
+      <div class="chips">${[['any','✨ Tanto faz'],['pan','🍳 Frigideira'],['oven','🔥 Forno'],['grill','♨️ Grelhador'],['airfryer','💨 Air fryer']].map(([v,l])=>`<button class="chip ${state.method===v?'active':''}" data-method="${v}">${l}</button>`).join('')}</div>
       <div class="photo-zone" style="margin-top:16px"><div class="photo-row"><span class="camera-glyph">⌾</span><div class="photo-copy"><b>Fotografar o frigorífico</b><p class="sub" style="font-size:12px;margin-top:3px">A pesquisa usa o texto. Se ligares IA, a fotografia também pode identificar ingredientes visíveis.</p></div><button id="photoBtn" class="ghost small">Adicionar</button></div>${state.photo?`<img class="photo-preview" src="${state.photo}" alt="Fotografia do frigorífico" />`:''}</div>
       <div class="btn-row"><button id="suggestBtn" class="primary full">Dar-me 5 ideias</button></div>
     </section>
@@ -350,7 +350,7 @@ function renderToday(){
   if($('#resumeMeal'))$('#resumeMeal').onclick=()=>openRecipe(state.currentMeal.recipe.id,true);
   $('#protein').addEventListener('input',e=>state.protein=e.target.value);
   $('#ingredients').addEventListener('input',e=>state.ingredients=e.target.value);
-  document.querySelectorAll('.quick-protein').forEach(b=>b.onclick=()=>{$('#protein').value=b.textContent;state.protein=b.textContent});
+  document.querySelectorAll('.quick-protein').forEach(b=>b.onclick=()=>{const v=b.dataset.protein||b.textContent;$('#protein').value=v;state.protein=v});
   document.querySelectorAll('[data-time]').forEach(b=>b.onclick=()=>{state.time=+b.dataset.time;renderToday()});
   document.querySelectorAll('[data-effort]').forEach(b=>b.onclick=()=>{state.effort=b.dataset.effort;renderToday()});
   document.querySelectorAll('[data-method]').forEach(b=>b.onclick=()=>{state.method=b.dataset.method;renderToday()});
@@ -387,7 +387,7 @@ function openRecipe(id,chosen=false){
   state.selected=r;
   const have=availableTokens();
   const matchedCount=r.ingredients.filter(([a])=>ingredientStatus(a)==='have').length;
-  app.innerHTML=`<button id="backToday" class="ghost small">← Voltar</button><section class="hero">${r.image?`<img class="detail-image" src="${esc(r.image)}" alt="${esc(r.name)}" referrerpolicy="no-referrer" onerror="this.remove()" />`:''}<div class="eyebrow">${isChosen?'Jantar de hoje':'Receita'}</div><h1>${esc(r.name)}</h1><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time?`${r.time} min`:'Tempo não indicado'}</span><span class="pill">Família de 5</span><span class="pill">${esc(r.suggestionType||r.style)}</span></div>${isChosen?`<div class="chosen-banner">✓ Escolhida para hoje</div>`:''}</section>
+  app.innerHTML=`<button id="backToday" class="ghost small">← Voltar</button><section class="hero">${r.image?`<img class="detail-image" src="${esc(r.image)}" alt="${esc(r.name)}" referrerpolicy="no-referrer" onerror="this.remove()" />`:''}<div class="eyebrow">${isChosen?'Jantar de hoje':'Receita'}</div><h1>${esc(r.name)}</h1><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time?`${r.time} min`:'Tempo não indicado'}</span><span class="pill">Refeição completa</span><span class="pill">${esc(r.suggestionType||r.style)}</span></div>${isChosen?`<div class="chosen-banner">✓ Escolhida para hoje</div>`:''}</section>
   ${(()=>{const a=smartAdaptation(r);if(!a.available)return'';return `<section class="card smart-adaptation"><div class="eyebrow">Adaptada ao que tens · Lume</div><h3>Podes fazê-la sem ir às compras</h3><p class="sub">Mantemos a estrutura da receita e trocamos apenas ingredientes compatíveis que disseste ter em casa.</p><div class="adaptation-swaps">${a.changes.map(c=>`<div class="swap-row"><span>${esc(c.from)}</span><b>→</b><strong>${esc(c.to)}</strong></div>`).join('')}</div><div class="divider"></div><h3>Ingredientes adaptados</h3><ul class="ingredients">${a.ingredients.map(([x,q])=>`<li class="${ingredientStatus(x)==='have'?'have':''}"><span>${ingredientStatus(x)==='have'?'<i>✓</i> ':''}${esc(x)}</span><b>${esc(q)}</b></li>`).join('')}</ul><h3 class="adapted-steps-title">Preparação adaptada</h3><ol class="steps compact-steps">${a.steps.map((step,i)=>`<li><span class="step-n">${i+1}</span><span>${esc(step)}</span></li>`).join('')}</ol><div class="source-note">Esta adaptação é proposta pelo Lume. A receita original da fonte permanece abaixo, sem alterações.</div></section>`})()}
   ${r.source==='composed'&&r.inspiredBy?.length?`<section class="card research-basis"><div class="eyebrow">Como nasceu esta ideia</div><h3>Composição Lume baseada em pesquisa real</h3><p class="sub">O Lume combinou os ingredientes que tens com padrões de cozinha portuguesa/mediterrânica encontrados nas receitas abaixo. Não atribuímos esta composição a nenhuma fonte individual.</p>${r.inspiredBy.map(x=>`<div class="source-inspiration"><strong>${esc(x.name)}</strong><span>${esc(x.sourceName||'Fonte')}</span>${x.sourceUrl?`<a href="${esc(x.sourceUrl)}" target="_blank" rel="noopener noreferrer">Ver inspiração</a>`:''}</div>`).join('')}</section>`:''}
   <section class="card original-recipe"><div class="section-head"><div><div class="eyebrow">${r.source==='composed'?'Receita composta pelo Lume':'Receita original'}</div><h3>Ingredientes</h3></div>${have.length?`<span class="match-badge">${matchedCount} encontrados em casa</span>`:''}</div><ul class="ingredients">${r.ingredients.map(([a,b])=>`<li class="${ingredientStatus(a)}"><span>${ingredientStatus(a)==='have'?'<i>✓</i> ':''}${esc(a)}</span><b>${esc(b)}</b></li>`).join('')}</ul>${state.ingredients?`<div class="adapt" style="margin-top:14px">Em casa indicaste: <b>${esc(state.ingredients)}</b>. O Lume usa estes ingredientes no ranking e, quando existe uma troca culinariamente compatível, mostra acima uma versão adaptada.</div>`:''}</section>

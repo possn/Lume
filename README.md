@@ -1,3 +1,16 @@
+# Lume v0.15.0 — Friendly Kitchen
+
+Visual refresh: linguagem mais jovial e descontraída, mantendo o posicionamento premium. Remove referências visíveis a “jantar para cinco” para tornar a interface mais universal para diferentes famílias. O motor de receitas e o Research Composer da v0.14.0 mantêm-se.
+
+## Destaques
+- Hero mais leve e conversacional
+- Paleta mais quente: coral, sálvia e apontamentos amarelos
+- Chips e controlos com pequenos ícones culinários
+- Cards mais suaves e arredondados
+- Mantém 5 sugestões por ronda: 3 portuguesas + 1 mediterrânica + 1 familiar
+- Mantém imagens reais das receitas sempre que disponíveis
+- Mantém pesquisa, adaptação e composição sem IA obrigatória
+
 # Lume v0.14.0 — Identity
 
 

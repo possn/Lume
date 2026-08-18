@@ -49,3 +49,49 @@ body{min-height:100vh}button,input,textarea,select{font:inherit}button{cursor:po
 @keyframes lume-smile{to{transform:scaleX(1) rotate(-3deg)}}
 @keyframes lume-name{to{opacity:1;transform:translateY(0)}}
 @media (prefers-reduced-motion:reduce){.splash-inner,.splash-mark span,.splash-name{animation:none}.splash-mark span{transform:scaleX(1) rotate(-3deg)}.splash-name{opacity:1;transform:none}}
+
+/* v0.15 — Friendly Kitchen visual refresh */
+:root{
+  --bg:#F7F2EA;
+  --surface:#FFF9F2;
+  --card:#FFFDFC;
+  --ink:#24211F;
+  --muted:#7D756D;
+  --soft:#B2A89E;
+  --accent:#E7795B;
+  --accent-soft:#FFE7DE;
+  --sage:#7E9B87;
+  --sage-soft:#E8F0EA;
+  --sun:#F2C86B;
+  --line:#E9DED2;
+  --line-strong:#D8C8B9;
+  --shadow:0 2px 5px rgba(53,39,27,.035),0 14px 34px rgba(53,39,27,.07);
+  --radius:28px;
+}
+body{background:
+  radial-gradient(circle at 8% 4%,rgba(231,121,91,.08),transparent 23%),
+  radial-gradient(circle at 92% 12%,rgba(126,155,135,.08),transparent 25%),
+  var(--bg)}
+.topbar{background:rgba(247,242,234,.88);border-bottom-color:rgba(224,211,199,.55)}
+.brand{font-weight:760}.brand-mark{border-radius:11px;background:#2B2925}.brand-mark span{border-bottom-color:#F0A78F}
+.ai-status{background:rgba(255,253,250,.74)}
+.main{padding-top:12px}
+.home-hero{position:relative;padding:28px 6px 26px;overflow:hidden}
+.home-hero:after{content:'✦';position:absolute;right:8px;top:18px;font-size:30px;color:var(--sun);transform:rotate(12deg);opacity:.9}
+.home-hero:before{content:'';position:absolute;right:36px;bottom:4px;width:74px;height:28px;border-radius:50%;border-bottom:4px solid rgba(231,121,91,.32);transform:rotate(-8deg)}
+.home-hero .eyebrow{display:inline-flex;align-items:center;gap:7px;background:var(--sage-soft);color:#657B6D;border-radius:999px;padding:7px 10px;letter-spacing:.11em}
+h1{font-weight:760}.home-hero h1{max-width:620px;font-size:44px;line-height:.98;margin-top:13px}.home-hero .sub{font-size:16px;max-width:610px}
+.card{background:rgba(255,253,250,.94);border-color:rgba(226,213,201,.92);box-shadow:var(--shadow)}
+.label{font-size:13px;font-weight:760;color:#403B37;margin-top:20px}
+.field{background:#FFFDFB;border-color:#E8DCD0;border-radius:20px;padding:15px 16px}.field:focus{border-color:#E4A48F;box-shadow:0 0 0 4px rgba(231,121,91,.09)}
+.chips{gap:8px}.chip{background:#FFFDFC;border-color:#E7D9CD;padding:10px 13px;font-weight:580}.chip.active{background:#2D2A27;border-color:#2D2A27;box-shadow:0 5px 14px rgba(45,42,39,.13)}
+.quick-protein{background:#FFF8F3}.quick-protein:nth-child(2n){background:#F7FBF7}.quick-protein:nth-child(3n){background:#FFFBEF}
+.choice{background:#FFFDFC;border-color:#E6D8CB;border-radius:22px;min-height:82px}.choice.selected{background:#FFF0EA;border-color:#E7A894;box-shadow:inset 0 0 0 1px rgba(231,121,91,.09)}.choice b{font-size:17px}
+.photo-zone{border-color:#DBC9B9;background:linear-gradient(135deg,#FFF8F0,#F8F5EE);border-radius:24px}.camera-glyph{background:#FFE9DF;color:#B95E47;border-radius:16px}
+.primary{background:#2D2A27;border-radius:18px}.secondary{background:var(--accent)}.ghost{background:#F2EAE0;border-radius:18px}
+#suggestBtn{font-size:16px;padding:15px 18px;box-shadow:0 8px 18px rgba(45,42,39,.14)}
+.recipe-card{border-radius:30px}.recipe-image{height:210px}.recipe-number{color:#B26B55}.pill{background:#F6EFE7;border-color:#E8DDD2}.use-home-badge{background:#EAF2EA!important}.adapt-home-badge{background:#FFF0E8!important;color:#A45E49!important}
+.recipe-actions .primary{background:#2D2A27}.recipe-actions .ghost{background:#F4ECE3}
+.bottom-nav{background:rgba(255,251,246,.92);border-top-color:#E8DDD2}.nav-item.active{color:#E06F53}.nav-item.active .nav-icon{transform:translateY(-1px)}
+.splash{background:var(--bg)}
+@media(max-width:520px){.home-hero h1{font-size:41px}.home-hero:after{font-size:25px}.card{padding:18px}.recipe-image{width:calc(100% + 34px);margin-left:-17px;margin-right:-17px}}
