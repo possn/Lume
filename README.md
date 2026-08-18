@@ -1,3 +1,7 @@
+# Lume v0.5.1 — Recipe-first retrieval
+
+Agora só são aceites receitas individuais completas: título, imagem quando disponível, ingredientes e preparação extraídos da própria fonte. Páginas de coleções/listas são rejeitadas. A proteína, ingredientes disponíveis, tempo máximo e método entram no filtro antes de uma receita ser mostrada.
+
 # Lume v0.5.0 — Direct Portuguese Sources
 
 PWA mobile-first para sugestões de refeições familiares.
