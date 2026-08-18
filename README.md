@@ -1,7 +1,7 @@
-# Lume v0.13.0 — Identity
+# Lume v0.14.0 — Identity
 
 
-## v0.13.0 — Identity
+## v0.14.0 — Identity
 - Novo splash de abertura curto (≈1,5 s), sem som.
 - Usa o símbolo interno do Lume: bloco escuro com o pequeno sorriso coral.
 - O sorriso desenha-se de forma subtil e o nome Lume aparece logo depois.
@@ -124,3 +124,13 @@ GitHub Pages funciona sem build. Depois de substituir os ficheiros, fazer commit
 - `config.js`
 - `sw.js`
 - `README.md`
+
+
+## v0.14.0 — Research Composer
+
+- O motor continua retrieval-first e sem necessidade de IA.
+- Mantém a regra 3 receitas portuguesas + 1 mediterrânica + 1 alternativa familiar.
+- Se a web não devolver cinco receitas suficientemente distintas, os lugares em falta são compostos deterministicamente a partir das receitas reais recuperadas e dos ingredientes indicados pelo utilizador.
+- As criações são identificadas como “Criação Lume” e nunca atribuídas falsamente a uma fonte.
+- O detalhe mostra as receitas reais que serviram de inspiração quando existe composição.
+- Cozinhas fora do perfil português/mediterrânico continuam excluídas do motor principal.

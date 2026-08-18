@@ -317,6 +317,97 @@
     return out.slice(0,count);
   }
 
+
+
+  function availableLabels(input){return ingredientEntries(input).map(x=>x.label)}
+  function chooseHave(input,concepts,limit=3){
+    const entries=ingredientEntries(input),out=[];
+    for(const concept of concepts){
+      const found=entries.find(e=>e.concept===concept);
+      if(found&&!out.includes(found.label))out.push(found.label);
+      if(out.length>=limit)break;
+    }
+    return out;
+  }
+  function hasConcept(input,concept){return ingredientEntries(input).some(e=>e.concept===concept)}
+  function methodFor(input,preferred){
+    if(input.method&&input.method!=='any')return input.method;
+    return preferred||'pan';
+  }
+  function composedTitle(protein,bucket,variant,input){
+    const p=strip(protein)||'Proteína';
+    const have=availableLabels(input).map(norm);
+    const has=t=>have.some(x=>x.includes(norm(t))||norm(t).includes(x));
+    const titles={
+      portuguese:[
+        has('tomate')?`${p} à portuguesa com tomate e cebola`:`${p} com alho, limão e azeite`,
+        has('arroz')?`Arroz malandrinho de ${p} e legumes`:`${p} estufado à portuguesa com legumes`,
+        has('batata')?`${p} no forno com batata e ervas`:`${p} assado com cebola, alho e legumes`
+      ],
+      mediterranean:[has('courgette')?`${p} mediterrânico com courgette e tomate`:`${p} mediterrânico com limão, ervas e legumes`],
+      family:[has('massa')?`Massa familiar com ${p} e legumes`:`${p} suave com arroz e legumes para toda a família`]
+    };
+    const arr=titles[bucket]||titles.portuguese;return arr[variant%arr.length];
+  }
+  function composeFromResearch(pool,input,bucket,variant=0){
+    if(!pool.length)return null;
+    const p=strip(input.protein)||'proteína';
+    const sourcePool=pool.filter(r=>bucketOf(r)===bucket); const bases=(sourcePool.length?sourcePool:pool).slice(0,4);
+    const base=bases[variant%bases.length]||pool[0];
+    const method=methodFor(input,bucket==='portuguese'&&variant===2?'oven':'pan');
+    const have=ingredientEntries(input); const labels=have.map(x=>x.label);
+    const proteinLabel=capFirst(p);
+    const pantry=[['Azeite','2–3 c. sopa'],['Alho','2 dentes'],['Cebola','1']];
+    const picked=[];
+    function add(label,qty='q.b.'){
+      if(!label)return; const n=norm(label); if(picked.some(([x])=>norm(x)===n))return; picked.push([label,qty]);
+    }
+    add(proteinLabel,'quantidade para 5');
+    labels.slice(0,5).forEach(x=>add(x,'q.b.'));
+    pantry.forEach(([a,b])=>add(a,b));
+    if(bucket==='mediterranean'){add('Limão','1');add('Orégãos ou ervas mediterrânicas','q.b.');}
+    if(bucket==='portuguese'&&variant===1&&!hasConcept(input,'tomate'))add('Tomate','2 ou 300 ml triturado');
+    if(bucket==='family'&&!hasConcept(input,'iogurte'))add('Iogurte natural ou queijo-creme','1 unidade');
+    const stepMethod={oven:'assar no forno',grill:'grelhar',airfryer:'cozinhar na air fryer',pan:'cozinhar numa frigideira ou tacho'}[method]||'cozinhar';
+    const veg=chooseHave(input,['tomate','courgette','cenoura','pimento','brocolos','ervilhas','feijao_verde'],2);
+    const carb=chooseHave(input,['arroz','batata','massa','grao','feijao'],1)[0]||'';
+    const steps=[
+      `Temperar ${p} de forma simples com azeite, alho e sal.`,
+      `${capFirst(stepMethod)} ${p} até ficar bem cozinhado e dourado.`,
+      veg.length?`Juntar ou preparar ${veg.join(' e ')} sem os cozinhar em excesso.`:`Juntar os legumes disponíveis em casa, mantendo uma confeção simples.`,
+      carb?`Usar ${carb} como base da refeição, ajustando a quantidade para cinco pessoas.`:`Completar com um acompanhamento português ou mediterrânico simples, conforme o que houver em casa.`,
+      bucket==='mediterranean'?'Finalizar com limão, azeite e ervas mediterrânicas.':bucket==='family'?'Manter o tempero suave e servir os componentes de forma simples para as crianças.':'Ajustar o molho com os sucos da confeção e servir de imediato.'
+    ];
+    const inspirations=bases.slice(0,2).map(r=>({name:r.name,sourceName:r.sourceName,sourceUrl:r.sourceUrl}));
+    return {
+      externalId:`lume-compose:${bucket}:${variant}:${norm(p)}`,
+      name:composedTitle(p,bucket,variant,input),
+      style:bucket==='mediterranean'?'Mediterrânico':bucket==='family'?'Familiar':'Português',
+      cuisineTier:bucket, suggestionType:bucket==='mediterranean'?'Mediterrânica':bucket==='family'?'Familiar':'Portuguesa',
+      time:Number(input.timeMinutes)||30, effort:input.effort==='normal'?'normal':'simple', methods:[method],
+      side:carb?`Refeição completa com ${carb}${veg.length?` e ${veg.join(' + ')}`:''}`:'Refeição completa composta pelo Lume',
+      ingredients:picked.slice(0,12), steps, adapt:[], image:'', source:'composed', sourceName:'Lume', sourceUrl:'',
+      sourceDescription:'Criação Lume construída por regras culinárias a partir das receitas reais recuperadas e dos ingredientes disponíveis.',
+      inspiredBy:inspirations, matchedIngredients:labels.length, availableIngredientCount:labels.length, matchedAvailableIngredients:labels,
+      ingredientCoverage:labels.length?1:0, discoveryIntent:bucket
+    };
+  }
+  function capFirst(x){const s=String(x||'');return s? s.charAt(0).toUpperCase()+s.slice(1):s}
+
+  function ensureFiveWithResearch(picked,ranked,input){
+    const out=[...picked];
+    const quota={portuguese:3,mediterranean:1,family:1};
+    const count=b=>out.filter(r=>bucketOf(r)===b).length;
+    for(const bucket of ['portuguese','mediterranean','family']){
+      let variant=0;
+      while(count(bucket)<quota[bucket]&&out.length<5&&variant<6){
+        const c=composeFromResearch(ranked,input,bucket,variant++);
+        if(c&&!out.some(x=>titleSimilarity(x.name,c.name)>=0.72))out.push(c);
+      }
+    }
+    return out.slice(0,5);
+  }
+
   async function suggest(input){
     const providers=(window.LUME_PROVIDERS||[]).filter(p=>p.enabled!==false).slice().sort((a,b)=>b.priority-a.priority);
     const results=[],status=[];
@@ -331,8 +422,11 @@
     const ranked=deDupeRank(results,input);
     const fresh=ranked.filter(r=>r._recentSimilarity<0.88);
     const pool=fresh.length?fresh:ranked;
-    const picked=diversePick(pool,5);
+    let picked=diversePick(pool,5);
     if(!picked.length){const err=new Error('DIRECT_COMPLETE_RECIPES_INSUFFICIENT');err.providerStatus=status;throw err}
+    // If the web does not supply all five category slots, compose the missing ideas from
+    // the real recipes already recovered. This is deterministic: no generative AI is required.
+    picked=ensureFiveWithResearch(picked,ranked,input);
     return picked.map(r=>{const x={...r};delete x.rawText;delete x._score;delete x._recentSimilarity;return x});
   }
 

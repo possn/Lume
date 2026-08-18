@@ -262,21 +262,17 @@ async function generate(){
         setAIStatus('busy');
         const recipes=await window.LumeRetrieval.suggest(buildAIInput());
         if(recipes.length>=1){
-          // Always render exactly 5 ideas: ideally 3 Portuguese, 1 Mediterranean and 1 family alternative.
-          // Retrieval already composes the mix; local recipes only fill missing slots.
-          const q=normalize(state.protein);
-          const matched=db.filter(r=>r.keys.some(k=>q.includes(normalize(k))||normalize(k).includes(q)));
-          const localPool=[...matched,...genericRecipes(state.protein)]
-            .filter(r=>!state.suggestionHistory.slice(-12).map(normalize).includes(normalize(r.name)))
-            .sort((a,b)=>scoreRecipe(b)-scoreRecipe(a))
-            .map(r=>({...r,source:r.source||'local'}));
-          // Compose the five slots explicitly. Retrieved recipes always win inside
-          // their category; local recipes only fill a missing Portuguese / Mediterranean / Family slot.
-          let picked=composeLocalFive([...recipes,...localPool]).map(r=>({...r,id:uid()}));
+          // The retrieval engine now returns the complete 3 PT + 1 Mediterranean + 1 Family mix.
+          // Missing web slots are composed deterministically from the recipes actually researched,
+          // never filled with unrelated generic templates while online.
+          let picked=recipes.slice(0,5).map(r=>({...r,id:uid()}));
           if(picked.length<5){
-            picked=composeLocalFive([...picked,...genericRecipes(state.protein)]).map(r=>r.id?r:{...r,id:uid(),source:r.source||'local'});
+            const q=normalize(state.protein);
+            const matched=db.filter(r=>r.keys.some(k=>q.includes(normalize(k))||normalize(k).includes(q)));
+            const localPool=[...matched,...genericRecipes(state.protein)].map(r=>({...r,source:r.source||'local'}));
+            picked=composeLocalFive([...picked,...localPool]).slice(0,5).map(r=>r.id?r:{...r,id:uid()});
           }
-          state.suggestions=composeCompleteMeals(picked.slice(0,5));
+          state.suggestions=composeCompleteMeals(picked);
           state.suggestionHistory.push(...state.suggestions.map(r=>r.name));
           state.suggestionHistory=state.suggestionHistory.slice(-60); store.set('suggestionHistory',state.suggestionHistory);
           setAIStatus(recipes.length>=5?'retrieval':'hybrid');
@@ -374,7 +370,7 @@ function renderSuggestions(){
 
 function recipeCard(r,i){
   const isReal=(r.source==='web'||r.source==='retrieved'||r.source==='direct');
-  const source=isReal?`Receita real · ${esc(r.sourceName||'fonte portuguesa')}`:(r.source==='ai'?'Adaptada pela IA do Lume':'Sugestão local do Lume');
+  const source=isReal?`Receita real · ${esc(r.sourceName||'fonte portuguesa')}`:(r.source==='composed'?'Criação Lume · baseada nas receitas pesquisadas':(r.source==='ai'?'Adaptada pela IA do Lume':'Sugestão local do Lume'));
   const cov=r.availableIngredientCount?{matched:r.matchedIngredients||0,total:r.availableIngredientCount,ratio:r.ingredientCoverage||0}:localIngredientCoverage(r);
   const match=cov.matched>0?` · usa ${cov.matched}/${cov.total} do que tens`:'';
   const useBadge=cov.total&&cov.ratio>=0.6?`<span class="pill use-home-badge">Bom aproveitamento</span>`:'';
@@ -393,7 +389,8 @@ function openRecipe(id,chosen=false){
   const matchedCount=r.ingredients.filter(([a])=>ingredientStatus(a)==='have').length;
   app.innerHTML=`<button id="backToday" class="ghost small">← Voltar</button><section class="hero">${r.image?`<img class="detail-image" src="${esc(r.image)}" alt="${esc(r.name)}" referrerpolicy="no-referrer" onerror="this.remove()" />`:''}<div class="eyebrow">${isChosen?'Jantar de hoje':'Receita'}</div><h1>${esc(r.name)}</h1><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time?`${r.time} min`:'Tempo não indicado'}</span><span class="pill">Família de 5</span><span class="pill">${esc(r.suggestionType||r.style)}</span></div>${isChosen?`<div class="chosen-banner">✓ Escolhida para hoje</div>`:''}</section>
   ${(()=>{const a=smartAdaptation(r);if(!a.available)return'';return `<section class="card smart-adaptation"><div class="eyebrow">Adaptada ao que tens · Lume</div><h3>Podes fazê-la sem ir às compras</h3><p class="sub">Mantemos a estrutura da receita e trocamos apenas ingredientes compatíveis que disseste ter em casa.</p><div class="adaptation-swaps">${a.changes.map(c=>`<div class="swap-row"><span>${esc(c.from)}</span><b>→</b><strong>${esc(c.to)}</strong></div>`).join('')}</div><div class="divider"></div><h3>Ingredientes adaptados</h3><ul class="ingredients">${a.ingredients.map(([x,q])=>`<li class="${ingredientStatus(x)==='have'?'have':''}"><span>${ingredientStatus(x)==='have'?'<i>✓</i> ':''}${esc(x)}</span><b>${esc(q)}</b></li>`).join('')}</ul><h3 class="adapted-steps-title">Preparação adaptada</h3><ol class="steps compact-steps">${a.steps.map((step,i)=>`<li><span class="step-n">${i+1}</span><span>${esc(step)}</span></li>`).join('')}</ol><div class="source-note">Esta adaptação é proposta pelo Lume. A receita original da fonte permanece abaixo, sem alterações.</div></section>`})()}
-  <section class="card original-recipe"><div class="section-head"><div><div class="eyebrow">Receita original</div><h3>Ingredientes</h3></div>${have.length?`<span class="match-badge">${matchedCount} encontrados em casa</span>`:''}</div><ul class="ingredients">${r.ingredients.map(([a,b])=>`<li class="${ingredientStatus(a)}"><span>${ingredientStatus(a)==='have'?'<i>✓</i> ':''}${esc(a)}</span><b>${esc(b)}</b></li>`).join('')}</ul>${state.ingredients?`<div class="adapt" style="margin-top:14px">Em casa indicaste: <b>${esc(state.ingredients)}</b>. O Lume usa estes ingredientes no ranking e, quando existe uma troca culinariamente compatível, mostra acima uma versão adaptada.</div>`:''}</section>
+  ${r.source==='composed'&&r.inspiredBy?.length?`<section class="card research-basis"><div class="eyebrow">Como nasceu esta ideia</div><h3>Composição Lume baseada em pesquisa real</h3><p class="sub">O Lume combinou os ingredientes que tens com padrões de cozinha portuguesa/mediterrânica encontrados nas receitas abaixo. Não atribuímos esta composição a nenhuma fonte individual.</p>${r.inspiredBy.map(x=>`<div class="source-inspiration"><strong>${esc(x.name)}</strong><span>${esc(x.sourceName||'Fonte')}</span>${x.sourceUrl?`<a href="${esc(x.sourceUrl)}" target="_blank" rel="noopener noreferrer">Ver inspiração</a>`:''}</div>`).join('')}</section>`:''}
+  <section class="card original-recipe"><div class="section-head"><div><div class="eyebrow">${r.source==='composed'?'Receita composta pelo Lume':'Receita original'}</div><h3>Ingredientes</h3></div>${have.length?`<span class="match-badge">${matchedCount} encontrados em casa</span>`:''}</div><ul class="ingredients">${r.ingredients.map(([a,b])=>`<li class="${ingredientStatus(a)}"><span>${ingredientStatus(a)==='have'?'<i>✓</i> ':''}${esc(a)}</span><b>${esc(b)}</b></li>`).join('')}</ul>${state.ingredients?`<div class="adapt" style="margin-top:14px">Em casa indicaste: <b>${esc(state.ingredients)}</b>. O Lume usa estes ingredientes no ranking e, quando existe uma troca culinariamente compatível, mostra acima uma versão adaptada.</div>`:''}</section>
   ${(()=>{const c=r.availableIngredientCount?{matched:r.matchedIngredients||0,total:r.availableIngredientCount,ratio:r.ingredientCoverage||0}:localIngredientCoverage(r);return c.total?`<section class="card home-use-card"><div class="eyebrow">Aproveitamento do que tens</div><h3>${c.matched} de ${c.total} ingredientes indicados</h3><p class="sub">O Lume cruza os ingredientes disponíveis com a proteína, o tempo e o método escolhidos e favorece receitas que aproveitem mais do que já existe em casa.</p></section>`:''})()}
   ${r.meal?.additions?.length?`<section class="card meal-composer"><div class="eyebrow">Refeição completa · sugestão Lume</div><h3>Para acompanhar</h3><p class="sub">${esc(r.meal.label)}</p><ul class="ingredients meal-side-ingredients">${r.meal.additions.flatMap(x=>x.ingredients||[]).map(([a,b])=>`<li class="${ingredientStatus(a)}"><span>${ingredientStatus(a)==='have'?'<i>✓</i> ':''}${esc(a)}</span><b>${esc(b)}</b></li>`).join('')}</ul><ol class="steps compact-steps">${r.meal.additions.map((x,i)=>`<li><span class="step-n">${i+1}</span><span>${esc(x.step)}</span></li>`).join('')}</ol><div class="source-note">O acompanhamento é composto pelo Lume; a receita principal mantém-se fiel à fonte original.</div></section>`:''}
   <section class="card"><div class="eyebrow">Passo a passo · receita original</div><h3>Como fazer</h3><ol class="steps">${r.steps.map((s,i)=>`<li><span class="step-n">${i+1}</span><span>${esc(s)}</span></li>`).join('')}</ol>${r.adapt?.length?`<div class="divider"></div><h3>Se faltar alguma coisa</h3>${r.adapt.map(a=>`<div class="adapt" style="margin-top:8px">${esc(a)}</div>`).join('')}`:''}</section>
