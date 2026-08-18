@@ -1,82 +1,59 @@
-# Publicação GitHub Pages — caminho recomendado
+# Lume v0.4.0 — Web Retrieval
 
-Esta versão inclui `.github/workflows/pages.yml` e `.nojekyll`.
+PWA familiar para escolher refeições. A fonte principal deixa de ser uma base fechada: o Lume pesquisa receitas reais na web.
 
-1. Coloque **o conteúdo deste ZIP na raiz do repositório** (não carregue o ZIP como um único ficheiro).
-2. Confirme que `index.html` aparece diretamente na página inicial do repositório.
-3. Em **Settings → Pages → Build and deployment → Source**, escolha **GitHub Actions**.
-4. Faça commit/push para a branch `main`.
-5. Abra **Actions → Deploy Lume to GitHub Pages** e confirme que o run termina a verde.
+## Arquitetura
 
-O workflow publica automaticamente a raiz do repositório.
+GitHub Pages (PWA) → Cloudflare Worker → Brave Search API → páginas de receitas → Schema.org `Recipe` JSON-LD.
 
----
+O Worker procura a web, abre resultados de receitas e recolhe dados estruturados como título, imagem, tempo e ingredientes. A preparação integral continua na fonte original; o Lume mostra um botão para a abrir. Isto evita transformar a app num republicador de textos de terceiros.
 
-# Lume v0.2 — PWA de refeições familiares
+Se o Worker não estiver configurado ou não devolver 3 resultados, o Lume usa TheMealDB apenas como fallback e, em último caso, o catálogo local.
 
-PWA mobile-first para uma família de 5 (2 adultos + crianças de 3, 5 e 11 anos). A experiência abre diretamente na decisão diária: dizer o que existe em casa → receber 3 refeições completas → escolher → avaliar → o Lume aprende.
+## 1. Publicar a PWA no GitHub Pages
 
-## V0.2
-- Nova interface premium, sóbria e suave, inspirada em aplicações nativas de iPhone.
-- Fluxo principal simplificado e hierarquia visual mais limpa.
-- 3 sugestões completas para 5 pessoas.
-- Proteína + ingredientes disponíveis + tempo + esforço + método.
-- Fotografia do frigorífico preparada para visão por IA.
-- Favoritas, histórico, planeamento semanal e aprendizagem local.
-- Camada `ai-client.js` separada da UI.
-- Fallback local automático se a IA estiver desligada ou falhar.
-- Gateway Cloudflare Worker incluído em `/worker` para manter a chave de IA fora do browser.
+Coloque na raiz do repositório:
+- index.html
+- styles.css
+- app.js
+- retrieval-client.js
+- ai-client.js
+- config.js
+- manifest.webmanifest
+- sw.js
+- icons/
+- .github/workflows/pages.yml (se já existir da v0.2.1, mantenha-o)
+- .nojekyll (se já existir, mantenha-o)
 
-## Ligar IA real
+## 2. Criar o Worker de pesquisa
 
-### 1. Publicar o Worker
-Na pasta `worker/`, copie `wrangler.toml.example` para `wrangler.toml` e preencha:
-- `OPENAI_MODEL`: um modelo atual da sua conta que aceite texto + imagem.
-- `ALLOWED_ORIGIN`: origem exata do GitHub Pages.
+Na pasta `worker/`:
+1. copie `wrangler.toml.example` para `wrangler.toml`;
+2. altere `ALLOWED_ORIGIN` para a origem do GitHub Pages, por exemplo `https://utilizador.github.io`;
+3. crie uma chave na Brave Search API;
+4. guarde-a como secret: `npx wrangler secret put BRAVE_SEARCH_API_KEY`;
+5. publique: `npx wrangler deploy`.
 
-Depois adicione a chave como secret, nunca no GitHub:
+## 3. Ligar a PWA ao Worker
 
-```bash
-npx wrangler secret put OPENAI_API_KEY
-npx wrangler deploy
-```
-
-### 2. Ligar a PWA ao Worker
-Em `config.js`, colocar apenas o URL público do Worker:
+Em `config.js` coloque apenas o URL público do Worker em `RETRIEVAL_ENDPOINT`, por exemplo:
 
 ```js
-AI_ENDPOINT: 'https://lume-ai.<conta>.workers.dev'
+RETRIEVAL_ENDPOINT: 'https://lume-search.<conta>.workers.dev',
 ```
 
-Não colocar qualquer API key em `config.js` ou `app.js`.
+Nunca coloque `BRAVE_SEARCH_API_KEY` no GitHub.
 
-### 3. Contrato
-A PWA envia ao endpoint `/v1/suggest`:
-- proteína principal;
-- ingredientes escritos;
-- fotografia opcional em Data URL;
-- tempo disponível;
-- esforço e método;
-- perfil familiar;
-- histórico recente e favoritas.
+## Como funciona “Outras ideias”
 
-O Worker devolve `{ "recipes": [...] }` com exatamente 3 receitas. O cliente valida a estrutura antes de a usar.
+Cada novo pedido muda `variationSeed` e envia `avoidRecipes`. O Worker altera a pesquisa, elimina títulos já mostrados e volta a ranquear os resultados por tempo, método, ingredientes disponíveis e perfil familiar.
 
-## Publicar no GitHub Pages
-Colocar na raiz do repositório:
-- `index.html`
-- `styles.css`
-- `app.js`
-- `ai-client.js`
-- `config.js`
-- `manifest.webmanifest`
-- `sw.js`
-- `icons/`
+## Ficheiros alterados nesta versão
 
-A pasta `worker/` não é necessária no GitHub Pages; pode ficar no mesmo repositório ou ser publicada separadamente no Cloudflare Workers.
-
-## Segurança
-- A chave da IA fica exclusivamente como secret do Worker.
-- A PWA funciona sem IA, usando fallback local.
-- O Worker restringe CORS à origem configurada.
-- A fotografia só é enviada quando o utilizador a adiciona e pede sugestões.
+- retrieval-client.js
+- config.js
+- app.js
+- sw.js
+- worker/worker.js
+- worker/wrangler.toml.example
+- README.md

@@ -8,7 +8,7 @@ const store = {
 
 const state = {
   route:'today', protein:'', ingredients:'', time:30, effort:'simple', method:'any', photo:null,
-  suggestions:[], selected:null,
+  suggestions:[], selected:null, isGenerating:false, suggestionHistory:[], generationRound:0,
   favorites:store.get('favorites',[]), history:store.get('history',[]), plan:store.get('plan',{})
 };
 
@@ -23,9 +23,9 @@ const db = [
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2200)}
-function setAIStatus(mode='local'){const el=$('#aiStatus');if(!el)return;el.classList.remove('online','busy');if(mode==='busy'){el.classList.add('busy');el.querySelector('span').textContent='A pensar';}else if(mode==='online'){el.classList.add('online');el.querySelector('span').textContent='IA';}else{el.querySelector('span').textContent='Local';}}
+function setAIStatus(mode='local'){const el=$('#aiStatus');if(!el)return;el.classList.remove('online','busy');if(mode==='busy'){el.classList.add('busy');el.querySelector('span').textContent='A procurar';}else if(mode==='retrieval'){el.classList.add('online');el.querySelector('span').textContent='Receitas reais';}else if(mode==='online'){el.classList.add('online');el.querySelector('span').textContent='IA';}else{el.querySelector('span').textContent='Local';}}
 function historyForAI(){return state.history.slice(0,20).map(h=>({name:h.recipe?.name||'',rating:h.rating,date:h.date,protein:h.protein||''}));}
-function buildAIInput(){return {family:window.LUME_CONFIG?.FAMILY||{people:5},protein:state.protein.trim(),availableIngredients:state.ingredients.trim(),timeMinutes:state.time,effort:state.effort,method:state.method,photoDataUrl:state.photo||null,history:historyForAI(),favorites:state.favorites.slice(0,12).map(f=>f.recipe?.name).filter(Boolean),language:'pt-PT',constraints:{completeMeal:true,numberOfSuggestions:3,noNutrition:true,adaptMissingIngredients:true,cuisines:['portuguesa','mediterranica'],childFriendly:true}};}
+function buildAIInput(){return {family:window.LUME_CONFIG?.FAMILY||{people:5},protein:state.protein.trim(),availableIngredients:state.ingredients.trim(),timeMinutes:state.time,effort:state.effort,method:state.method,photoDataUrl:state.photo||null,history:historyForAI(),favorites:state.favorites.slice(0,12).map(f=>f.recipe?.name).filter(Boolean),avoidRecipes:state.suggestionHistory.slice(-12),variationSeed:state.generationRound,language:'pt-PT',constraints:{completeMeal:true,numberOfSuggestions:3,noNutrition:true,adaptMissingIngredients:true,cuisines:['portuguesa','mediterranica'],childFriendly:true,requireNovelSuggestions:true}};}
 function normalize(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 
@@ -34,7 +34,12 @@ function genericRecipes(protein){
   return [
     {name:`${cap(p)} na frigideira com limão e ervas`,style:'Mediterrânico',time:25,effort:'simple',methods:['pan'],side:'Arroz e legumes',ingredients:[[cap(p),'quantidade para 5'],['Arroz','300 g'],['Legumes variados','400 g'],['Limão','1'],['Azeite','2 c. sopa']],steps:[`Preparar e temperar ${p} com sal, alho, limão e azeite.`,'Cozinhar numa frigideira quente até estar no ponto.','Preparar arroz simples.','Saltear os legumes disponíveis.','Servir tudo junto, usando os sucos da frigideira como molho.'],adapt:['Substituir qualquer legume pelo que tiveres em casa.']},
     {name:`${cap(p)} assado à portuguesa`,style:'Português',time:45,effort:'normal',methods:['oven'],side:'Batata, cebola e tomate',ingredients:[[cap(p),'quantidade para 5'],['Batata','1 kg'],['Cebola','1'],['Tomate','2'],['Azeite','3 c. sopa']],steps:['Aquecer o forno a 200 ºC.','Dispor batata e cebola num tabuleiro.','Juntar a proteína temperada e tomate.','Regar com azeite e assar até estar cozinhado.','Servir com salada ou legumes.'],adapt:['Sem batata: usar arroz, batata-doce ou legumes assados.']},
-    {name:`Taça mediterrânica de ${p}`,style:'Mediterrânico',time:30,effort:'simple',methods:['pan','grill','airfryer'],side:'Cuscuz ou arroz e salada',ingredients:[[cap(p),'quantidade para 5'],['Cuscuz ou arroz','300 g'],['Tomate','2'],['Pepino','1'],['Iogurte natural','1']],steps:[`Grelhar ou saltear ${p} em pedaços.`,'Preparar cuscuz ou arroz.','Cortar os legumes frescos.','Misturar iogurte com limão ou ervas para um molho simples.','Montar em taças para cada pessoa.'],adapt:['Sem iogurte: usar azeite e limão.','Usar os vegetais que existirem.']}
+    {name:`Taça mediterrânica de ${p}`,style:'Mediterrânico',time:30,effort:'simple',methods:['pan','grill','airfryer'],side:'Cuscuz ou arroz e salada',ingredients:[[cap(p),'quantidade para 5'],['Cuscuz ou arroz','300 g'],['Tomate','2'],['Pepino','1'],['Iogurte natural','1']],steps:[`Grelhar ou saltear ${p} em pedaços.`,'Preparar cuscuz ou arroz.','Cortar os legumes frescos.','Misturar iogurte com limão ou ervas para um molho simples.','Montar em taças para cada pessoa.'],adapt:['Sem iogurte: usar azeite e limão.','Usar os vegetais que existirem.']},
+    {name:`${cap(p)} com molho suave de tomate e arroz`,style:'Familiar',time:30,effort:'simple',methods:['pan'],side:'Arroz branco e legumes verdes',ingredients:[[cap(p),'quantidade para 5'],['Tomate triturado','350 ml'],['Arroz','300 g'],['Cebola','1'],['Legumes verdes','350 g']],steps:[`Dourar ${p} com um fio de azeite.`,'Juntar cebola e tomate e cozinhar em lume brando.','Cozer o arroz à parte.','Preparar os legumes sem os deixar demasiado moles.','Servir com o molho por cima.'],adapt:['Sem tomate: fazer um molho leve de iogurte e limão.']},
+    {name:`Espetadas de ${p} com legumes`,style:'Mediterrânico',time:35,effort:'normal',methods:['grill','airfryer','oven'],side:'Batata rústica ou arroz',ingredients:[[cap(p),'quantidade para 5'],['Pimento ou courgette','2'],['Cebola','1'],['Batata','900 g'],['Azeite','2 c. sopa']],steps:[`Cortar ${p} e os legumes em pedaços semelhantes.`,'Montar espetadas e temperar com azeite e ervas.','Grelhar, assar ou cozinhar na air fryer até dourar.','Preparar batata rústica ou arroz.','Servir as espetadas ao centro.'],adapt:['Sem espetos: cozinhar tudo solto num tabuleiro.']},
+    {name:`Arroz de ${p} e legumes numa só panela`,style:'Português',time:35,effort:'simple',methods:['pan'],side:'Refeição completa numa só panela',ingredients:[[cap(p),'quantidade para 5'],['Arroz','350 g'],['Cenoura','2'],['Ervilhas','200 g'],['Cebola','1'],['Caldo ou água','q.b.']],steps:[`Cortar ${p} em pedaços e alourar.`,'Juntar cebola e cenoura.','Adicionar arroz e caldo suficiente.','Juntar as ervilhas perto do fim e cozinhar até o arroz ficar no ponto.','Repousar 3 minutos antes de servir.'],adapt:['Usar milho, feijão-verde ou courgette no lugar das ervilhas.']},
+    {name:`${cap(p)} crocante na air fryer`,style:'Familiar',time:25,effort:'simple',methods:['airfryer','oven'],side:'Batata-doce e salada de tomate',ingredients:[[cap(p),'quantidade para 5'],['Pão ralado','80 g'],['Batata-doce','900 g'],['Tomate','3'],['Azeite','2 c. sopa']],steps:[`Cortar e temperar ${p}.`,'Passar ligeiramente por pão ralado.','Cozinhar na air fryer ou forno até dourar.','Assar a batata-doce em palitos.','Servir com tomate temperado.'],adapt:['Sem pão ralado: usar aveia triturada ou cozinhar sem cobertura.']},
+    {name:`Massa mediterrânica com ${p} e legumes`,style:'Mediterrânico',time:30,effort:'simple',methods:['pan'],side:'Massa curta com molho leve',ingredients:[[cap(p),'quantidade para 5'],['Massa curta','400 g'],['Courgette','1'],['Tomate','2'],['Alho','1 dente'],['Azeite','2 c. sopa']],steps:[`Saltear ${p} em pedaços.`,'Juntar courgette, tomate e alho.','Cozer a massa e reservar um pouco da água.','Envolver tudo com um pouco da água da massa e azeite.','Servir de imediato.'],adapt:['Qualquer legume macio pode substituir a courgette.']}
   ]
 }
 function cap(s){return s.charAt(0).toUpperCase()+s.slice(1)}
@@ -61,32 +66,75 @@ function scoreRecipe(r){
 }
 
 async function generate(){
+  if(state.isGenerating) return;
+  state.isGenerating=true;
+  state.generationRound+=1;
   const button=$('#suggestBtn');
-  if(button){button.disabled=true;button.textContent='A pensar…'}
+  const otherButtons=[...document.querySelectorAll('[data-more]')];
+  if(button){button.disabled=true;button.textContent='A procurar…'}
+  otherButtons.forEach(b=>{b.disabled=true;b.textContent='A procurar…'});
   const host=$('#suggestions');
-  if(host)host.innerHTML=`<section class="card loading-card"><span class="spinner"></span><div class="loading-copy"><b>A preparar três ideias</b><small>A combinar o que tens com o que a família costuma gostar.</small></div></section>`;
+  if(host)host.innerHTML=`<section class="card loading-card"><span class="spinner"></span><div class="loading-copy"><b>A procurar receitas reais</b><small>A selecionar opções diferentes e adequadas ao que tens.</small></div></section>`;
 
-  if(window.LumeAI?.isConfigured()){
-    try{
-      setAIStatus('busy');
-      const recipes=await window.LumeAI.suggest(buildAIInput());
-      state.suggestions=recipes.map(r=>({...r,id:uid()}));
-      setAIStatus('online');
-      renderSuggestions();
-      return;
-    }catch(err){
-      console.warn('Lume AI fallback:',err);
-      toast('A IA não respondeu. Usei o motor local para não te deixar sem ideias.');
-      setAIStatus('local');
+  try{
+    // 1) Retrieval-first: receitas reais da Internet são a fonte principal.
+    if(navigator.onLine && window.LumeRetrieval){
+      try{
+        setAIStatus('busy');
+        const recipes=await window.LumeRetrieval.suggest(buildAIInput());
+        if(recipes.length>=3){
+          state.suggestions=recipes.slice(0,3).map(r=>({...r,id:uid()}));
+          state.suggestionHistory.push(...state.suggestions.map(r=>r.name));
+          state.suggestionHistory=state.suggestionHistory.slice(-24);
+          setAIStatus('retrieval');
+          renderSuggestions();
+          return;
+        }
+      }catch(err){
+        console.warn('Lume retrieval fallback:',err);
+      }
     }
-  }
 
-  const q=normalize(state.protein);
-  let pool=db.filter(r=>r.keys.some(k=>q.includes(normalize(k))||normalize(k).includes(q)));
-  if(pool.length<3) pool=[...pool,...genericRecipes(state.protein)].slice(0,6);
-  state.suggestions=pool.sort((a,b)=>scoreRecipe(b)-scoreRecipe(a)).slice(0,3).map(r=>({...r,id:uid(),source:'local'}));
-  renderSuggestions();
-  if(button){button.disabled=false;button.textContent='Dar-me 3 ideias'}
+    // 2) IA é opcional: pode adaptar/gerar apenas se o endpoint estiver configurado.
+    if(window.LumeAI?.isConfigured()){
+      try{
+        setAIStatus('busy');
+        const recipes=await window.LumeAI.suggest(buildAIInput());
+        state.suggestions=recipes.map(r=>({...r,id:uid()}));
+        state.suggestionHistory.push(...state.suggestions.map(r=>r.name));
+        state.suggestionHistory=state.suggestionHistory.slice(-24);
+        setAIStatus('online');
+        renderSuggestions();
+        return;
+      }catch(err){
+        console.warn('Lume AI fallback:',err);
+      }
+    }
+
+    // 3) Fallback local: a app continua útil offline ou se uma API falhar.
+    toast('Não consegui pesquisar receitas agora. Usei as sugestões locais.');
+    setAIStatus('local');
+    const q=normalize(state.protein);
+    const matched=db.filter(r=>r.keys.some(k=>q.includes(normalize(k))||normalize(k).includes(q)));
+    let pool=[...matched,...genericRecipes(state.protein)];
+    const recent=new Set(state.suggestionHistory.slice(-9).map(normalize));
+    let fresh=pool.filter(r=>!recent.has(normalize(r.name)));
+    if(fresh.length<3){
+      const oldestFirst=[...pool].sort((a,b)=>state.suggestionHistory.indexOf(a.name)-state.suggestionHistory.indexOf(b.name));
+      fresh=[...fresh,...oldestFirst.filter(r=>!fresh.some(x=>normalize(x.name)===normalize(r.name)))];
+    }
+    const offset=state.generationRound % Math.max(fresh.length,1);
+    fresh=[...fresh.slice(offset),...fresh.slice(0,offset)];
+    state.suggestions=fresh.sort((a,b)=>scoreRecipe(b)-scoreRecipe(a)).slice(0,3).map(r=>({...r,id:uid(),source:'local'}));
+    state.suggestionHistory.push(...state.suggestions.map(r=>r.name));
+    state.suggestionHistory=state.suggestionHistory.slice(-24);
+    renderSuggestions();
+  } finally {
+    state.isGenerating=false;
+    const current=$('#suggestBtn');
+    if(current){current.disabled=false;current.textContent='Dar-me 3 ideias'}
+    document.querySelectorAll('[data-more]').forEach(b=>{b.disabled=false;b.textContent='Outras ideias'});
+  }
 }
 
 function route(name){state.route=name; document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.nav===name)); render()}
@@ -119,7 +167,7 @@ function renderToday(){
       </div>
       <label class="label">Como queres cozinhar?</label>
       <div class="chips">${[['any','Tanto faz'],['pan','Frigideira'],['oven','Forno'],['grill','Grelhador'],['airfryer','Air fryer']].map(([v,l])=>`<button class="chip ${state.method===v?'active':''}" data-method="${v}">${l}</button>`).join('')}</div>
-      <div class="photo-zone" style="margin-top:16px"><div class="photo-row"><span class="camera-glyph">⌾</span><div class="photo-copy"><b>Fotografar o frigorífico</b><p class="sub" style="font-size:12px;margin-top:3px">Com IA ligada, o Lume identifica os ingredientes visíveis e usa-os nas sugestões.</p></div><button id="photoBtn" class="ghost small">Adicionar</button></div>${state.photo?`<img class="photo-preview" src="${state.photo}" alt="Fotografia do frigorífico" />`:''}</div>
+      <div class="photo-zone" style="margin-top:16px"><div class="photo-row"><span class="camera-glyph">⌾</span><div class="photo-copy"><b>Fotografar o frigorífico</b><p class="sub" style="font-size:12px;margin-top:3px">A pesquisa usa o texto. Se ligares IA, a fotografia também pode identificar ingredientes visíveis.</p></div><button id="photoBtn" class="ghost small">Adicionar</button></div>${state.photo?`<img class="photo-preview" src="${state.photo}" alt="Fotografia do frigorífico" />`:''}</div>
       <div class="btn-row"><button id="suggestBtn" class="primary full">Dar-me 3 ideias</button></div>
     </section>
     <section id="suggestions"></section>`;
@@ -140,10 +188,11 @@ function renderSuggestions(){
   host.innerHTML=`<section class="hero" style="padding-top:22px"><div class="eyebrow">Três possibilidades</div><h2>Escolhe a que vos apetece.</h2></section>`+state.suggestions.map((r,i)=>recipeCard(r,i)).join('');
   host.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.open));
   host.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.pick,true));
+  host.querySelectorAll('[data-more]').forEach(b=>b.onclick=()=>generate());
   host.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function recipeCard(r,i){return `<article class="card recipe-card"><span class="recipe-number">IDEIA 0${i+1}</span><h3>${esc(r.name)}</h3><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time} min</span><span class="pill">${r.effort==='simple'?'Simples':'Normal'}</span><span class="pill">${esc(r.style)}</span></div><div class="recipe-actions"><button class="primary" data-pick="${r.id}">Vou fazer esta</button><button class="ghost" data-open="${r.id}">Ver receita</button><button class="ghost" onclick="generate()">Outras ideias</button></div><div class="source-note">${r.source==='ai'?'Criada para hoje pelo Lume':'Sugestão local do Lume'}</div></article>`}
+function recipeCard(r,i){const source=(r.source==='web'||r.source==='retrieved')?`Receita real · ${esc(r.sourceName||'fonte externa')}`:(r.source==='ai'?'Adaptada pela IA do Lume':'Sugestão local do Lume');return `<article class="card recipe-card">${r.image?`<img class="recipe-image" src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`:''}<span class="recipe-number">IDEIA 0${i+1}</span><h3>${esc(r.name)}</h3><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">≈ ${r.time} min</span><span class="pill">${r.effort==='simple'?'Simples':'Normal'}</span><span class="pill">${esc(r.style)}</span></div><div class="recipe-actions"><button class="primary" data-pick="${r.id}">Vou fazer esta</button><button class="ghost" data-open="${r.id}">Ver receita</button><button class="ghost" data-more="1">Outras ideias</button></div><div class="source-note">${source}</div></article>`}
 
 function openRecipe(id,chosen=false){
   const r=state.suggestions.find(x=>x.id===id)||state.favorites.find(x=>x.id===id)?.recipe||state.history.find(x=>x.recipe.id===id)?.recipe;
@@ -152,7 +201,7 @@ function openRecipe(id,chosen=false){
   app.innerHTML=`<button id="backToday" class="ghost small">← Voltar</button><section class="hero"><div class="eyebrow">${chosen?'Escolhida para hoje':'Receita'}</div><h1>${esc(r.name)}</h1><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time} min</span><span class="pill">Para 5</span><span class="pill">${esc(r.style)}</span></div></section>
   <section class="card"><h3>Ingredientes</h3><ul class="ingredients">${r.ingredients.map(([a,b])=>`<li><span>${esc(a)}</span><b>${esc(b)}</b></li>`).join('')}</ul>${state.ingredients?`<div class="adapt" style="margin-top:14px">Vou privilegiar o que disseste que tens: <b>${esc(state.ingredients)}</b>. Se algo da lista faltar, usa as substituições abaixo.</div>`:''}</section>
   <section class="card"><h3>Como fazer</h3><ol class="steps">${r.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol><div class="divider"></div><h3>Se faltar alguma coisa</h3>${r.adapt.map(a=>`<div class="adapt" style="margin-top:8px">${esc(a)}</div>`).join('')}</section>
-  <section class="card"><h3>Depois do jantar</h3><p class="sub" style="margin-bottom:13px">O Lume aprende com a família. Como correu?</p><div class="feedback">${[[4,'😍','Adorámos'],[3,'🙂','Gostámos'],[2,'😐','Assim-assim'],[1,'👎','Não repetir']].map(([v,e,l])=>`<button data-rate="${v}">${e}<small>${l}</small></button>`).join('')}</div></section>`;
+  ${(r.source==='web'||r.source==='retrieved')&&r.sourceUrl?`<section class="card source-card"><div><div class="eyebrow">Fonte original</div><h3>${esc(r.sourceName||'Receita na Internet')}</h3><p class="sub">O Lume encontrou esta receita na web. Ingredientes e dados essenciais são usados para seleção; a preparação completa permanece na fonte original.</p></div><a class="ghost source-link" href="${esc(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">Abrir fonte ↗</a></section>`:''}<section class="card"><h3>Depois do jantar</h3><p class="sub" style="margin-bottom:13px">O Lume aprende com a família. Como correu?</p><div class="feedback">${[[4,'😍','Adorámos'],[3,'🙂','Gostámos'],[2,'😐','Assim-assim'],[1,'👎','Não repetir']].map(([v,e,l])=>`<button data-rate="${v}">${e}<small>${l}</small></button>`).join('')}</div></section>`;
   $('#backToday').onclick=()=>route('today');
   document.querySelectorAll('[data-rate]').forEach(b=>b.onclick=()=>saveFeedback(r,+b.dataset.rate));
 }
@@ -193,4 +242,4 @@ $('#installBtn').onclick=async()=>{if(!deferredPrompt)return;deferredPrompt.prom
 
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 render();
-setAIStatus(window.LumeAI?.isConfigured()?'online':'local');
+setAIStatus(navigator.onLine&&window.LumeRetrieval?'retrieval':(window.LumeAI?.isConfigured()?'online':'local'));
