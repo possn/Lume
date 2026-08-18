@@ -1,35 +1,36 @@
-# Lume v0.6.0 — Recipe Discovery
+# Lume v0.7.0 — Cook & Learn
 
-A pesquisa de receitas foi reconstruída para deixar de reciclar três modelos com a proteína substituída.
+PWA mobile-first para decidir refeições familiares para 5 pessoas.
 
-## Motor de descoberta
+## Ciclo principal
 
-Fluxo principal: **input → pesquisa multi-query → extração da receita → scoring → deduplicação → diversidade de fontes → rotação**.
+**O que tenho → 3 ideias → Ver receita → Vou fazer esta → Cozinhar → Feedback → Aprendizagem**
 
-- cozinha portuguesa é prioritária; mediterrânica mantém-se como perfil secundário;
-- proteína, ingredientes disponíveis, tempo e método entram no ranking;
-- páginas agregadoras ("10 receitas…", "especial receitas…", listas e coleções) são rejeitadas;
-- só uma página com ingredientes e preparação suficientes é aceite como receita real;
-- receitas recentes são guardadas em `localStorage` e fortemente penalizadas nas pesquisas seguintes, inclusive depois de fechar/reabrir a PWA;
-- títulos quase iguais são deduplicados por similaridade lexical;
-- a seleção tenta usar fontes diferentes nos três cartões;
-- "Outras ideias" roda a estratégia de pesquisa e evita as sugestões já vistas;
-- cada cartão mostra fotografia quando a fonte a disponibiliza e indica quantos ingredientes disponíveis coincidem;
-- o caminho direto não necessita de Cloudflare Worker nem de chave de pesquisa.
+### Alterações v0.7.0
+- Mantém o motor retrieval-first com 3 sugestões e “Outras ideias”.
+- “Vou fazer esta” passa a guardar a refeição escolhida como jantar atual.
+- A refeição atual reaparece no ecrã Hoje até ser avaliada.
+- O detalhe da receita foi transformado num modo de cozinha mais legível: fotografia, ingredientes, passos numerados, substituições e fonte.
+- Ingredientes indicados pelo utilizador são assinalados quando coincidem com a receita.
+- Feedback familiar: Adorámos / Gostámos / Assim-assim / Não repetir.
+- Feedback adicional simples para crianças e adultos.
+- O histórico guarda contexto, avaliação e aceitação por crianças/adultos.
+- Receitas “Adorámos” entram automaticamente em Favoritas.
+- Receitas já feitas mostram memória temporal (“há X semanas”) e o ranking local usa o feedback anterior.
+- Estado e aprendizagem persistem em localStorage.
 
-## Fallback
+## Ficheiros a substituir no GitHub
 
-O fallback local só é usado quando nenhuma fonte direta devolve uma receita completa. É explicitamente identificado como "Sugestão local do Lume" e nunca é apresentado como receita recuperada da Internet.
-
-## GitHub Pages — ficheiros a substituir
-
-Nesta versão basta substituir:
+Para atualizar a partir da v0.6.1, substituir apenas:
 
 - `app.js`
-- `retrieval-client.js`
-- `providers.js`
+- `styles.css`
 - `config.js`
 - `sw.js`
 - `README.md`
 
-Os restantes ficheiros podem permanecer como estão.
+Os restantes ficheiros da v0.6.1 podem permanecer inalterados.
+
+## Deploy
+
+GitHub Pages funciona sem build. Depois de substituir os ficheiros, fazer commit/push. A alteração do nome da cache no `sw.js` força a PWA a abandonar os assets antigos após a atualização do service worker.

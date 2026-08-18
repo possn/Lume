@@ -183,10 +183,10 @@
     if(provider.type!=='wp')return[];
     const qs=queryPlan(input),seed=Math.abs(Number(input.variationSeed)||0);let all=[];
     // Different rounds start from a different query and, occasionally, the second WP results page.
-    for(let i=0;i<Math.min(6,qs.length);i++){
+    for(let i=0;i<qs.length;i++){
       const q=qs[i],page=(seed>1&&i===0&&seed%3===0)?2:1;
       try{all.push(...await wpSearch(provider,q,input,page));}catch(e){if(page>1){try{all.push(...await wpSearch(provider,q,input,1));}catch{}}}
-      if(all.length>=7)break;
+      if(all.length>=12)break;
     }
     return all;
   }
@@ -220,7 +220,7 @@
       const batch=providers.slice(i,i+4),settled=await Promise.allSettled(batch.map(p=>searchProvider(p,input)));
       settled.forEach((s,j)=>{const p=batch[j];if(s.status==='fulfilled'){status.push({id:p.id,name:p.name,ok:true,count:s.value.length});results.push(...s.value)}else status.push({id:p.id,name:p.name,ok:false,count:0})});
       const ranked=deDupeRank(results,input),fresh=ranked.filter(r=>r._recentSimilarity<0.88);
-      if(fresh.length>=7&&new Set(fresh.map(r=>r.providerId)).size>=3)break;
+      if(fresh.length>=3&&new Set(fresh.map(r=>r.providerId)).size>=2)break;
     }
     window.dispatchEvent(new CustomEvent('lume:provider-status',{detail:status}));
     const ranked=deDupeRank(results,input);

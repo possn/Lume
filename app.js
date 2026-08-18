@@ -9,7 +9,8 @@ const store = {
 const state = {
   route:'today', protein:'', ingredients:'', time:30, effort:'simple', method:'any', photo:null,
   suggestions:[], selected:null, isGenerating:false, suggestionHistory:store.get('suggestionHistory',[]), generationRound:store.get('generationRound',0),
-  favorites:store.get('favorites',[]), history:store.get('history',[]), plan:store.get('plan',{})
+  favorites:store.get('favorites',[]), history:store.get('history',[]), plan:store.get('plan',{}),
+  currentMeal:store.get('currentMeal',null)
 };
 
 const db = [
@@ -24,10 +25,20 @@ const db = [
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2200)}
 function setAIStatus(mode='local'){const el=$('#aiStatus');if(!el)return;el.classList.remove('online','busy');if(mode==='busy'){el.classList.add('busy');el.querySelector('span').textContent='A procurar';}else if(mode==='retrieval'){el.classList.add('online');el.querySelector('span').textContent='Fontes PT';}else if(mode==='online'){el.classList.add('online');el.querySelector('span').textContent='IA';}else{el.querySelector('span').textContent='Local';}}
-function historyForAI(){return state.history.slice(0,20).map(h=>({name:h.recipe?.name||'',rating:h.rating,date:h.date,protein:h.protein||''}));}
+function historyForAI(){return state.history.slice(0,30).map(h=>({name:h.recipe?.name||'',rating:h.rating,date:h.date,protein:h.protein||'',childrenLiked:h.childrenLiked,adultsLiked:h.adultsLiked}));}
 function buildAIInput(){return {family:window.LUME_CONFIG?.FAMILY||{people:5},protein:state.protein.trim(),availableIngredients:state.ingredients.trim(),timeMinutes:state.time,effort:state.effort,method:state.method,photoDataUrl:state.photo||null,history:historyForAI(),favorites:state.favorites.slice(0,12).map(f=>f.recipe?.name).filter(Boolean),avoidRecipes:state.suggestionHistory.slice(-12),variationSeed:state.generationRound,language:'pt-PT',constraints:{completeMeal:true,numberOfSuggestions:3,noNutrition:true,adaptMissingIngredients:true,cuisines:['portuguesa','mediterranica'],childFriendly:true,requireNovelSuggestions:true}};}
 function normalize(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+
+function daysSince(date){const ms=Date.now()-new Date(date).getTime();return Math.max(0,Math.floor(ms/86400000))}
+function lastHistoryFor(name){return state.history.find(h=>normalize(h.recipe?.name)===normalize(name))||null}
+function repeatNote(recipe){const h=lastHistoryFor(recipe.name);if(!h)return'';const d=daysSince(h.date);const when=d===0?'hoje':d===1?'há 1 dia':d<14?`há ${d} dias`:d<56?`há ${Math.round(d/7)} semanas`:`há ${Math.round(d/30)} meses`;const label={4:'adoraram',3:'gostaram',2:'ficou assim-assim',1:'não quiseram repetir'}[h.rating]||'já fizeram';return `Última vez: ${label} · ${when}`}
+function availableTokens(){return normalize(state.ingredients).split(/[,;\n]+/).map(x=>x.trim()).filter(x=>x.length>2)}
+function ingredientStatus(name){const n=normalize(name);const tokens=availableTokens();return tokens.some(t=>n.includes(t)||t.includes(n))?'have':''}
+function chooseRecipe(recipe){
+  state.currentMeal={id:uid(),chosenAt:new Date().toISOString(),protein:state.protein,context:{ingredients:state.ingredients,time:state.time,effort:state.effort,method:state.method},recipe:{...recipe}};
+  store.set('currentMeal',state.currentMeal);state.selected=recipe;openRecipe(recipe.id,true);
+}
 
 function genericRecipes(protein){
   const p=protein||'proteína';
@@ -59,8 +70,12 @@ function scoreRecipe(r){
     if(days<14) score-=4;
     else if(days<28) score-=1;
     else if(previous.rating>=3) score+=2;
-    if(previous.rating===1) score-=6;
-    if(previous.rating===4) score+=1;
+    if(previous.rating===1) score-=8;
+    if(previous.rating===4) score+=2;
+    if(previous.childrenLiked===false) score-=5;
+    if(previous.childrenLiked===true) score+=1.5;
+    if(previous.adultsLiked===false) score-=2;
+    if(previous.adultsLiked===true) score+=0.5;
   }
   return score;
 }
@@ -83,10 +98,34 @@ async function generate(){
         setAIStatus('busy');
         const recipes=await window.LumeRetrieval.suggest(buildAIInput());
         if(recipes.length>=1){
-          state.suggestions=recipes.slice(0,3).map(r=>({...r,id:uid()}));
+          // Always render exactly 3 ideas. Prefer real retrieved recipes and only
+          // fill missing slots locally when the public sources returned fewer than 3.
+          const picked=recipes.slice(0,3).map(r=>({...r,id:uid()}));
+          if(picked.length<3){
+            const q=normalize(state.protein);
+            const matched=db.filter(r=>r.keys.some(k=>q.includes(normalize(k))||normalize(k).includes(q)));
+            const localPool=[...matched,...genericRecipes(state.protein)]
+              .filter(r=>!picked.some(x=>normalize(x.name)===normalize(r.name)))
+              .filter(r=>!state.suggestionHistory.slice(-12).map(normalize).includes(normalize(r.name)))
+              .sort((a,b)=>scoreRecipe(b)-scoreRecipe(a));
+            for(const r of localPool){
+              picked.push({...r,id:uid(),source:'local'});
+              if(picked.length===3)break;
+            }
+          }
+          // Absolute guarantee: never leave the UI with 1–2 cards.
+          if(picked.length<3){
+            const emergency=genericRecipes(state.protein)
+              .filter(r=>!picked.some(x=>normalize(x.name)===normalize(r.name)));
+            for(const r of emergency){
+              picked.push({...r,id:uid(),source:'local'});
+              if(picked.length===3)break;
+            }
+          }
+          state.suggestions=picked.slice(0,3);
           state.suggestionHistory.push(...state.suggestions.map(r=>r.name));
           state.suggestionHistory=state.suggestionHistory.slice(-60); store.set('suggestionHistory',state.suggestionHistory);
-          setAIStatus('retrieval');
+          setAIStatus(recipes.length>=3?'retrieval':'hybrid');
           renderSuggestions();
           return;
         }
@@ -135,6 +174,7 @@ function render(){
 function renderToday(){
   app.innerHTML=`
     <section class="hero"><div class="eyebrow">Jantar para cinco</div><h1>O que temos para o jantar?</h1><p class="sub">Diz-me o que há. O Lume transforma isso em três refeições completas, práticas e pensadas para a família.</p></section>
+    ${state.currentMeal?`<section class="card current-meal"><div><div class="eyebrow">Escolhida para hoje</div><h3>${esc(state.currentMeal.recipe.name)}</h3><p class="sub">${esc(state.currentMeal.recipe.side)}</p></div><button id="resumeMeal" class="primary small">Abrir</button></section>`:''}
     <section class="card">
       <label class="label">Proteína principal</label>
       <input id="protein" class="field" placeholder="Ex.: bifes de peru, salmão, frango…" value="${esc(state.protein)}" />
@@ -157,6 +197,7 @@ function renderToday(){
     </section>
     <section id="suggestions"></section>`;
 
+  if($('#resumeMeal'))$('#resumeMeal').onclick=()=>openRecipe(state.currentMeal.recipe.id,true);
   $('#protein').addEventListener('input',e=>state.protein=e.target.value);
   $('#ingredients').addEventListener('input',e=>state.ingredients=e.target.value);
   document.querySelectorAll('.quick-protein').forEach(b=>b.onclick=()=>{$('#protein').value=b.textContent;state.protein=b.textContent});
@@ -172,32 +213,48 @@ function renderSuggestions(){
   const host=$('#suggestions'); if(!host)return;
   host.innerHTML=`<section class="hero" style="padding-top:22px"><div class="eyebrow">Três possibilidades</div><h2>Escolhe a que vos apetece.</h2></section>`+state.suggestions.map((r,i)=>recipeCard(r,i)).join('');
   host.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.open));
-  host.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.pick,true));
+  host.querySelectorAll('[data-pick]').forEach(b=>b.onclick=()=>{const r=state.suggestions.find(x=>x.id===b.dataset.pick);if(r)chooseRecipe(r)});
   host.querySelectorAll('[data-more]').forEach(b=>b.onclick=()=>generate());
   host.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function recipeCard(r,i){const isReal=(r.source==='web'||r.source==='retrieved'||r.source==='direct');const source=isReal?`Receita real · ${esc(r.sourceName||'fonte portuguesa')}`:(r.source==='ai'?'Adaptada pela IA do Lume':'Sugestão local do Lume');const match=r.matchedIngredients>0?` · usa ${r.matchedIngredients} ${r.matchedIngredients===1?'ingrediente':'ingredientes'} que tens`:'';return `<article class="card recipe-card">${r.image?`<img class="recipe-image" src="${esc(r.image)}" alt="${esc(r.name)}" loading="lazy" referrerpolicy="no-referrer" />`:''}<span class="recipe-number">IDEIA 0${i+1}</span><h3>${esc(r.name)}</h3><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time?`≈ ${r.time} min`:'Tempo não indicado'}</span><span class="pill">${r.effort==='simple'?'Simples':'Normal'}</span><span class="pill">${esc(r.style)}</span></div><div class="recipe-actions"><button class="primary" data-pick="${r.id}">Vou fazer esta</button><button class="ghost" data-open="${r.id}">Ver receita</button><button class="ghost" data-more="1">Outras ideias</button></div><div class="source-note">${source}${match}</div></article>`}
-
-function openRecipe(id,chosen=false){
-  const r=state.suggestions.find(x=>x.id===id)||state.favorites.find(x=>x.id===id)?.recipe||state.history.find(x=>x.recipe.id===id)?.recipe;
-  if(!r)return;
-  state.selected=r;
-  app.innerHTML=`<button id="backToday" class="ghost small">← Voltar</button><section class="hero"><div class="eyebrow">${chosen?'Escolhida para hoje':'Receita'}</div><h1>${esc(r.name)}</h1><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time?`${r.time} min`:'Tempo não indicado'}</span><span class="pill">Para 5</span><span class="pill">${esc(r.style)}</span></div></section>
-  <section class="card"><h3>Ingredientes</h3><ul class="ingredients">${r.ingredients.map(([a,b])=>`<li><span>${esc(a)}</span><b>${esc(b)}</b></li>`).join('')}</ul>${state.ingredients?`<div class="adapt" style="margin-top:14px">Vou privilegiar o que disseste que tens: <b>${esc(state.ingredients)}</b>. Se algo da lista faltar, usa as substituições abaixo.</div>`:''}</section>
-  <section class="card"><h3>Como fazer</h3><ol class="steps">${r.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol><div class="divider"></div><h3>Se faltar alguma coisa</h3>${r.adapt.map(a=>`<div class="adapt" style="margin-top:8px">${esc(a)}</div>`).join('')}</section>
-  ${(r.source==='web'||r.source==='retrieved'||r.source==='direct')&&r.sourceUrl?`<section class="card source-card"><div><div class="eyebrow">Fonte original</div><h3>${esc(r.sourceName||'Receita na Internet')}</h3><p class="sub">O Lume recuperou esta receita da fonte original e aplicou os filtros escolhidos. Podes confirmar a publicação original aqui.</p></div><a class="ghost source-link" href="${esc(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">Abrir fonte ↗</a></section>`:''}<section class="card"><h3>Depois do jantar</h3><p class="sub" style="margin-bottom:13px">O Lume aprende com a família. Como correu?</p><div class="feedback">${[[4,'😍','Adorámos'],[3,'🙂','Gostámos'],[2,'😐','Assim-assim'],[1,'👎','Não repetir']].map(([v,e,l])=>`<button data-rate="${v}">${e}<small>${l}</small></button>`).join('')}</div></section>`;
-  $('#backToday').onclick=()=>route('today');
-  document.querySelectorAll('[data-rate]').forEach(b=>b.onclick=()=>saveFeedback(r,+b.dataset.rate));
+function recipeCard(r,i){
+  const isReal=(r.source==='web'||r.source==='retrieved'||r.source==='direct');
+  const source=isReal?`Receita real · ${esc(r.sourceName||'fonte portuguesa')}`:(r.source==='ai'?'Adaptada pela IA do Lume':'Sugestão local do Lume');
+  const match=r.matchedIngredients>0?` · usa ${r.matchedIngredients} ${r.matchedIngredients===1?'ingrediente':'ingredientes'} que tens`:'';
+  const repeat=repeatNote(r);
+  return `<article class="card recipe-card">${r.image?`<img class="recipe-image" src="${esc(r.image)}" alt="${esc(r.name)}" loading="lazy" referrerpolicy="no-referrer" />`:''}<span class="recipe-number">IDEIA 0${i+1}</span><h3>${esc(r.name)}</h3><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time?`≈ ${r.time} min`:'Tempo não indicado'}</span><span class="pill">${r.effort==='simple'?'Simples':'Normal'}</span><span class="pill">${esc(r.style)}</span></div>${repeat?`<div class="memory-note">↻ ${esc(repeat)}</div>`:''}<div class="recipe-actions"><button class="primary" data-pick="${r.id}">Vou fazer esta</button><button class="ghost" data-open="${r.id}">Ver receita</button><button class="ghost" data-more="1">Outras ideias</button></div><div class="source-note">${source}${match}</div></article>`
 }
 
-function saveFeedback(recipe,rating){
-  const entry={id:uid(),date:new Date().toISOString(),rating,recipe:{...recipe},protein:state.protein};
+function openRecipe(id,chosen=false){
+  const r=state.suggestions.find(x=>x.id===id)||state.favorites.find(x=>x.id===id)?.recipe||state.history.find(x=>x.recipe.id===id)?.recipe||state.currentMeal?.recipe;
+  if(!r)return;
+  const isChosen=chosen || normalize(state.currentMeal?.recipe?.name)===normalize(r.name);
+  state.selected=r;
+  const have=availableTokens();
+  const matchedCount=r.ingredients.filter(([a])=>ingredientStatus(a)==='have').length;
+  app.innerHTML=`<button id="backToday" class="ghost small">← Voltar</button><section class="hero">${r.image?`<img class="detail-image" src="${esc(r.image)}" alt="${esc(r.name)}" />`:''}<div class="eyebrow">${isChosen?'Jantar de hoje':'Receita'}</div><h1>${esc(r.name)}</h1><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time?`${r.time} min`:'Tempo não indicado'}</span><span class="pill">Família de 5</span><span class="pill">${esc(r.style)}</span></div>${isChosen?`<div class="chosen-banner">✓ Escolhida para hoje</div>`:''}</section>
+  <section class="card"><div class="section-head"><div><div class="eyebrow">Mise en place</div><h3>Ingredientes</h3></div>${have.length?`<span class="match-badge">${matchedCount} encontrados em casa</span>`:''}</div><ul class="ingredients">${r.ingredients.map(([a,b])=>`<li class="${ingredientStatus(a)}"><span>${ingredientStatus(a)==='have'?'<i>✓</i> ':''}${esc(a)}</span><b>${esc(b)}</b></li>`).join('')}</ul>${state.ingredients?`<div class="adapt" style="margin-top:14px">Em casa indicaste: <b>${esc(state.ingredients)}</b>. O Lume usa estes ingredientes no ranking e sugere substituições quando a receita não coincide exatamente.</div>`:''}</section>
+  <section class="card"><div class="eyebrow">Passo a passo</div><h3>Como fazer</h3><ol class="steps">${r.steps.map((s,i)=>`<li><span class="step-n">${i+1}</span><span>${esc(s)}</span></li>`).join('')}</ol>${r.adapt?.length?`<div class="divider"></div><h3>Se faltar alguma coisa</h3>${r.adapt.map(a=>`<div class="adapt" style="margin-top:8px">${esc(a)}</div>`).join('')}`:''}</section>
+  ${(r.source==='web'||r.source==='retrieved'||r.source==='direct')&&r.sourceUrl?`<section class="card source-card"><div><div class="eyebrow">Fonte original</div><h3>${esc(r.sourceName||'Receita na Internet')}</h3><p class="sub">Receita recuperada da fonte original e selecionada segundo o contexto da família.</p></div><a class="ghost source-link" href="${esc(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">Abrir fonte ↗</a></section>`:''}
+  ${isChosen?`<section class="card dinner-feedback"><div class="eyebrow">Depois da refeição</div><h3>Como correu cá em casa?</h3><p class="sub">Esta resposta altera as próximas sugestões do Lume.</p><div class="feedback">${[[4,'😍','Adorámos'],[3,'🙂','Gostámos'],[2,'😐','Assim-assim'],[1,'👎','Não repetir']].map(([v,e,l])=>`<button data-rate="${v}">${e}<small>${l}</small></button>`).join('')}</div><div id="audienceFeedback" class="audience-feedback hidden"><p>Quem gostou?</p><div class="grid"><button class="choice selected" data-audience="children"><b>Crianças</b><small>Sim</small></button><button class="choice selected" data-audience="adults"><b>Adultos</b><small>Sim</small></button></div><button id="saveDinnerFeedback" class="primary full">Guardar avaliação</button></div></section>`:`<button id="chooseFromDetail" class="primary full sticky-action">Vou fazer esta</button>`}`;
+  $('#backToday').onclick=()=>route('today');
+  if(!isChosen) $('#chooseFromDetail').onclick=()=>chooseRecipe(r);
+  let pendingRating=null, childrenLiked=true, adultsLiked=true;
+  document.querySelectorAll('[data-rate]').forEach(b=>b.onclick=()=>{pendingRating=+b.dataset.rate;document.querySelectorAll('[data-rate]').forEach(x=>x.classList.toggle('selected',x===b));$('#audienceFeedback')?.classList.remove('hidden')});
+  document.querySelectorAll('[data-audience]').forEach(b=>b.onclick=()=>{const on=!b.classList.contains('selected');b.classList.toggle('selected',on);b.querySelector('small').textContent=on?'Sim':'Não';if(b.dataset.audience==='children')childrenLiked=on;else adultsLiked=on});
+  const save=$('#saveDinnerFeedback');if(save)save.onclick=()=>{if(!pendingRating)return toast('Escolhe primeiro como correu o jantar.');saveFeedback(r,pendingRating,{childrenLiked,adultsLiked})};
+}
+
+function saveFeedback(recipe,rating,detail={}){
+  const chosenAt=state.currentMeal?.chosenAt||new Date().toISOString();
+  const entry={id:uid(),date:new Date().toISOString(),chosenAt,rating,childrenLiked:detail.childrenLiked??null,adultsLiked:detail.adultsLiked??null,recipe:{...recipe},protein:state.currentMeal?.protein||state.protein,context:state.currentMeal?.context||null};
   state.history.unshift(entry);store.set('history',state.history);
-  if(rating===4&&!state.favorites.some(f=>f.recipe.name===recipe.name)){
-    state.favorites.unshift({id:uid(),added:new Date().toISOString(),recipe:{...recipe}});store.set('favorites',state.favorites);toast('Guardada nas Favoritas da Família ♥');
-  } else toast('Feedback guardado. O Lume vai aprender com isto.');
-  setTimeout(()=>route('today'),500);
+  if(rating===4&&!state.favorites.some(f=>normalize(f.recipe.name)===normalize(recipe.name))){
+    state.favorites.unshift({id:uid(),added:new Date().toISOString(),recipe:{...recipe}});store.set('favorites',state.favorites);toast('Entrou nas Favoritas da Família ♥');
+  } else toast('Avaliação guardada. As próximas sugestões vão ter isto em conta.');
+  state.currentMeal=null;store.set('currentMeal',null);
+  setTimeout(()=>route('today'),650);
 }
 
 function renderFavorites(){
@@ -208,7 +265,7 @@ function renderFavorites(){
 
 function renderHistory(){
   const labels={4:'😍 Adorámos',3:'🙂 Gostámos',2:'😐 Assim-assim',1:'👎 Não repetir'};
-  app.innerHTML=`<section class="hero"><div class="eyebrow">Memória</div><h1>Histórico</h1><p class="sub">O que cozinharam e como a família reagiu.</p></section>${state.history.length?state.history.map(h=>`<section class="card list-card"><div class="content"><h3>${esc(h.recipe.name)}</h3><p>${new Date(h.date).toLocaleDateString('pt-PT')} · ${esc(h.recipe.side)}</p></div><span class="badge">${labels[h.rating]}</span></section>`).join(''):`<div class="card empty">O histórico começa depois da primeira refeição avaliada.</div>`}`;
+  app.innerHTML=`<section class="hero"><div class="eyebrow">Memória</div><h1>Histórico</h1><p class="sub">O que cozinharam e como a família reagiu.</p></section>${state.history.length?state.history.map(h=>`<section class="card list-card"><div class="content"><h3>${esc(h.recipe.name)}</h3><p>${new Date(h.date).toLocaleDateString('pt-PT')} · ${esc(h.recipe.side)}${h.childrenLiked===false?' · crianças não gostaram':''}${h.adultsLiked===false?' · adultos não gostaram':''}</p></div><span class="badge">${labels[h.rating]}</span></section>`).join(''):`<div class="card empty">O histórico começa depois da primeira refeição avaliada.</div>`}`;
 }
 
 function renderPlan(){

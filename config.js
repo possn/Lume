@@ -1,6 +1,6 @@
 /** Lume runtime configuration. Safe to publish: direct retrieval uses no secret API keys. */
 window.LUME_CONFIG = Object.freeze({
-  VERSION: '0.6.0',
+  VERSION: '0.7.0',
   RETRIEVAL_PROVIDER: 'direct-sources',
   RETRIEVAL_TIMEOUT_MS: 8500,
   MAX_PROVIDER_RESULTS: 16,
