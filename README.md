@@ -1,3 +1,17 @@
+# Publicação GitHub Pages — caminho recomendado
+
+Esta versão inclui `.github/workflows/pages.yml` e `.nojekyll`.
+
+1. Coloque **o conteúdo deste ZIP na raiz do repositório** (não carregue o ZIP como um único ficheiro).
+2. Confirme que `index.html` aparece diretamente na página inicial do repositório.
+3. Em **Settings → Pages → Build and deployment → Source**, escolha **GitHub Actions**.
+4. Faça commit/push para a branch `main`.
+5. Abra **Actions → Deploy Lume to GitHub Pages** e confirme que o run termina a verde.
+
+O workflow publica automaticamente a raiz do repositório.
+
+---
+
 # Lume v0.2 — PWA de refeições familiares
 
 PWA mobile-first para uma família de 5 (2 adultos + crianças de 3, 5 e 11 anos). A experiência abre diretamente na decisão diária: dizer o que existe em casa → receber 3 refeições completas → escolher → avaliar → o Lume aprende.
