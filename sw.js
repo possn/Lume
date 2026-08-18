@@ -1,4 +1,4 @@
-const CACHE='lume-v0.5.1-direct-portuguese-sources';
+const CACHE='lume-v0.6.0-recipe-discovery';
 const ASSETS=['./','index.html','styles.css','config.js','providers.js','retrieval-client.js','ai-client.js','app.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-180.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

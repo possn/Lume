@@ -8,7 +8,7 @@ const store = {
 
 const state = {
   route:'today', protein:'', ingredients:'', time:30, effort:'simple', method:'any', photo:null,
-  suggestions:[], selected:null, isGenerating:false, suggestionHistory:[], generationRound:0,
+  suggestions:[], selected:null, isGenerating:false, suggestionHistory:store.get('suggestionHistory',[]), generationRound:store.get('generationRound',0),
   favorites:store.get('favorites',[]), history:store.get('history',[]), plan:store.get('plan',{})
 };
 
@@ -68,7 +68,7 @@ function scoreRecipe(r){
 async function generate(){
   if(state.isGenerating) return;
   state.isGenerating=true;
-  state.generationRound+=1;
+  state.generationRound+=1; store.set('generationRound',state.generationRound);
   const button=$('#suggestBtn');
   const otherButtons=[...document.querySelectorAll('[data-more]')];
   if(button){button.disabled=true;button.textContent='A procurar…'}
@@ -82,10 +82,10 @@ async function generate(){
       try{
         setAIStatus('busy');
         const recipes=await window.LumeRetrieval.suggest(buildAIInput());
-        if(recipes.length>=3){
+        if(recipes.length>=1){
           state.suggestions=recipes.slice(0,3).map(r=>({...r,id:uid()}));
           state.suggestionHistory.push(...state.suggestions.map(r=>r.name));
-          state.suggestionHistory=state.suggestionHistory.slice(-24);
+          state.suggestionHistory=state.suggestionHistory.slice(-60); store.set('suggestionHistory',state.suggestionHistory);
           setAIStatus('retrieval');
           renderSuggestions();
           return;
@@ -95,8 +95,9 @@ async function generate(){
       }
     }
 
-    // 2) Fallback local português/mediterrânico: nunca troca de universo culinário só para preencher cartões.
-    toast('Não encontrei 3 opções portuguesas/mediterrânicas na web. Usei alternativas locais desse perfil.');
+    // 2) Só usar fallback local quando a pesquisa web não devolveu nenhuma receita completa.
+    // Nunca fingir que uma sugestão local é uma receita recuperada da Internet.
+    toast(navigator.onLine?'As fontes não devolveram receitas completas agora. Vou usar alternativas locais, sem as apresentar como receitas da web.':'Sem ligação. Vou usar alternativas locais.');
     setAIStatus('local');
     const q=normalize(state.protein);
     const matched=db.filter(r=>r.keys.some(k=>q.includes(normalize(k))||normalize(k).includes(q)));
@@ -111,7 +112,7 @@ async function generate(){
     fresh=[...fresh.slice(offset),...fresh.slice(0,offset)];
     state.suggestions=fresh.sort((a,b)=>scoreRecipe(b)-scoreRecipe(a)).slice(0,3).map(r=>({...r,id:uid(),source:'local'}));
     state.suggestionHistory.push(...state.suggestions.map(r=>r.name));
-    state.suggestionHistory=state.suggestionHistory.slice(-24);
+    state.suggestionHistory=state.suggestionHistory.slice(-60); store.set('suggestionHistory',state.suggestionHistory);
     renderSuggestions();
   } finally {
     state.isGenerating=false;
@@ -176,7 +177,7 @@ function renderSuggestions(){
   host.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function recipeCard(r,i){const source=(r.source==='web'||r.source==='retrieved'||r.source==='direct')?`Receita real · ${esc(r.sourceName||'fonte portuguesa')}`:(r.source==='ai'?'Adaptada pela IA do Lume':'Sugestão local do Lume');return `<article class="card recipe-card">${r.image?`<img class="recipe-image" src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`:''}<span class="recipe-number">IDEIA 0${i+1}</span><h3>${esc(r.name)}</h3><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time?`≈ ${r.time} min`:'Tempo não indicado'}</span><span class="pill">${r.effort==='simple'?'Simples':'Normal'}</span><span class="pill">${esc(r.style)}</span></div><div class="recipe-actions"><button class="primary" data-pick="${r.id}">Vou fazer esta</button><button class="ghost" data-open="${r.id}">Ver receita</button><button class="ghost" data-more="1">Outras ideias</button></div><div class="source-note">${source}</div></article>`}
+function recipeCard(r,i){const isReal=(r.source==='web'||r.source==='retrieved'||r.source==='direct');const source=isReal?`Receita real · ${esc(r.sourceName||'fonte portuguesa')}`:(r.source==='ai'?'Adaptada pela IA do Lume':'Sugestão local do Lume');const match=r.matchedIngredients>0?` · usa ${r.matchedIngredients} ${r.matchedIngredients===1?'ingrediente':'ingredientes'} que tens`:'';return `<article class="card recipe-card">${r.image?`<img class="recipe-image" src="${esc(r.image)}" alt="${esc(r.name)}" loading="lazy" referrerpolicy="no-referrer" />`:''}<span class="recipe-number">IDEIA 0${i+1}</span><h3>${esc(r.name)}</h3><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time?`≈ ${r.time} min`:'Tempo não indicado'}</span><span class="pill">${r.effort==='simple'?'Simples':'Normal'}</span><span class="pill">${esc(r.style)}</span></div><div class="recipe-actions"><button class="primary" data-pick="${r.id}">Vou fazer esta</button><button class="ghost" data-open="${r.id}">Ver receita</button><button class="ghost" data-more="1">Outras ideias</button></div><div class="source-note">${source}${match}</div></article>`}
 
 function openRecipe(id,chosen=false){
   const r=state.suggestions.find(x=>x.id===id)||state.favorites.find(x=>x.id===id)?.recipe||state.history.find(x=>x.recipe.id===id)?.recipe;

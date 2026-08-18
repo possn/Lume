@@ -1,42 +1,35 @@
-# Lume v0.5.1 — Recipe-first retrieval
+# Lume v0.6.0 — Recipe Discovery
 
-Agora só são aceites receitas individuais completas: título, imagem quando disponível, ingredientes e preparação extraídos da própria fonte. Páginas de coleções/listas são rejeitadas. A proteína, ingredientes disponíveis, tempo máximo e método entram no filtro antes de uma receita ser mostrada.
+A pesquisa de receitas foi reconstruída para deixar de reciclar três modelos com a proteína substituída.
 
-# Lume v0.5.0 — Direct Portuguese Sources
+## Motor de descoberta
 
-PWA mobile-first para sugestões de refeições familiares.
+Fluxo principal: **input → pesquisa multi-query → extração da receita → scoring → deduplicação → diversidade de fontes → rotação**.
 
-## O que mudou
+- cozinha portuguesa é prioritária; mediterrânica mantém-se como perfil secundário;
+- proteína, ingredientes disponíveis, tempo e método entram no ranking;
+- páginas agregadoras ("10 receitas…", "especial receitas…", listas e coleções) são rejeitadas;
+- só uma página com ingredientes e preparação suficientes é aceite como receita real;
+- receitas recentes são guardadas em `localStorage` e fortemente penalizadas nas pesquisas seguintes, inclusive depois de fechar/reabrir a PWA;
+- títulos quase iguais são deduplicados por similaridade lexical;
+- a seleção tenta usar fontes diferentes nos três cartões;
+- "Outras ideias" roda a estratégia de pesquisa e evita as sugestões já vistas;
+- cada cartão mostra fotografia quando a fonte a disponibiliza e indica quantos ingredientes disponíveis coincidem;
+- o caminho direto não necessita de Cloudflare Worker nem de chave de pesquisa.
 
-- O caminho principal deixou de precisar de Cloudflare Worker, Brave Search ou TheMealDB.
-- `providers.js` contém um registo de fontes culinárias portuguesas.
-- O browser tenta pesquisar diretamente cada fonte através de endpoints públicos (WordPress REST ou feeds Blogger).
-- Cada fonte é testada em runtime. Se bloquear CORS, tiver o endpoint desligado ou mudar de tecnologia, é ignorada sem bloquear o Lume.
-- O ranking privilegia explicitamente cozinha portuguesa e rejeita títulos claramente fora do perfil culinário definido.
-- Se menos de três fontes diretas responderem com resultados úteis, o Lume mantém o fallback local português/mediterrânico existente.
+## Fallback
 
-## Fontes candidatas iniciais
+O fallback local só é usado quando nenhuma fonte direta devolve uma receita completa. É explicitamente identificado como "Sugestão local do Lume" e nunca é apresentado como receita recuperada da Internet.
 
-Teleculinária, Cozinha à la Carte, Tuga na Cozinha, Cinco Quartos de Laranja, Petiscos, Receitas e Menus, Clara de Sousa, SaborIntenso e blogs culinários portugueses em Blogger.
+## GitHub Pages — ficheiros a substituir
 
-Isto é um registry, não uma lista fechada. Acrescentar uma fonte compatível é apenas adicionar uma entrada em `providers.js`.
+Nesta versão basta substituir:
 
-## Nota técnica importante
-
-Uma página pública não implica permissão de CORS. Por isso a compatibilidade é deliberadamente testada no próprio dispositivo em cada execução. Não há chaves API no frontend.
-
-## GitHub Pages
-
-Publicar todos os ficheiros na raiz do repositório. `index.html` deve estar na raiz. O service worker usa o cache `lume-v0.5.0-direct-portuguese-sources`.
-
-## Ficheiros alterados nesta versão
-
-- `index.html`
-- `config.js`
-- `providers.js` (novo)
-- `retrieval-client.js`
 - `app.js`
+- `retrieval-client.js`
+- `providers.js`
+- `config.js`
 - `sw.js`
 - `README.md`
 
-O diretório `worker/` fica apenas como legado/opção futura e não é necessário para o modo direto da v0.5.0.
+Os restantes ficheiros podem permanecer como estão.
