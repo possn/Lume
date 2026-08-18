@@ -23,7 +23,7 @@ const db = [
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2200)}
-function setAIStatus(mode='local'){const el=$('#aiStatus');if(!el)return;el.classList.remove('online','busy');if(mode==='busy'){el.classList.add('busy');el.querySelector('span').textContent='A procurar';}else if(mode==='retrieval'){el.classList.add('online');el.querySelector('span').textContent='Receitas reais';}else if(mode==='online'){el.classList.add('online');el.querySelector('span').textContent='IA';}else{el.querySelector('span').textContent='Local';}}
+function setAIStatus(mode='local'){const el=$('#aiStatus');if(!el)return;el.classList.remove('online','busy');if(mode==='busy'){el.classList.add('busy');el.querySelector('span').textContent='A procurar';}else if(mode==='retrieval'){el.classList.add('online');el.querySelector('span').textContent='Fontes PT';}else if(mode==='online'){el.classList.add('online');el.querySelector('span').textContent='IA';}else{el.querySelector('span').textContent='Local';}}
 function historyForAI(){return state.history.slice(0,20).map(h=>({name:h.recipe?.name||'',rating:h.rating,date:h.date,protein:h.protein||''}));}
 function buildAIInput(){return {family:window.LUME_CONFIG?.FAMILY||{people:5},protein:state.protein.trim(),availableIngredients:state.ingredients.trim(),timeMinutes:state.time,effort:state.effort,method:state.method,photoDataUrl:state.photo||null,history:historyForAI(),favorites:state.favorites.slice(0,12).map(f=>f.recipe?.name).filter(Boolean),avoidRecipes:state.suggestionHistory.slice(-12),variationSeed:state.generationRound,language:'pt-PT',constraints:{completeMeal:true,numberOfSuggestions:3,noNutrition:true,adaptMissingIngredients:true,cuisines:['portuguesa','mediterranica'],childFriendly:true,requireNovelSuggestions:true}};}
 function normalize(s){return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
@@ -74,7 +74,7 @@ async function generate(){
   if(button){button.disabled=true;button.textContent='A procurar…'}
   otherButtons.forEach(b=>{b.disabled=true;b.textContent='A procurar…'});
   const host=$('#suggestions');
-  if(host)host.innerHTML=`<section class="card loading-card"><span class="spinner"></span><div class="loading-copy"><b>A procurar receitas reais</b><small>A selecionar opções diferentes e adequadas ao que tens.</small></div></section>`;
+  if(host)host.innerHTML=`<section class="card loading-card"><span class="spinner"></span><div class="loading-copy"><b>A procurar na web</b><small>Primeiro cozinha portuguesa; depois mediterrânica. Sem sugestões fora do perfil só para preencher espaço.</small></div></section>`;
 
   try{
     // 1) Retrieval-first: receitas reais da Internet são a fonte principal.
@@ -95,24 +95,8 @@ async function generate(){
       }
     }
 
-    // 2) IA é opcional: pode adaptar/gerar apenas se o endpoint estiver configurado.
-    if(window.LumeAI?.isConfigured()){
-      try{
-        setAIStatus('busy');
-        const recipes=await window.LumeAI.suggest(buildAIInput());
-        state.suggestions=recipes.map(r=>({...r,id:uid()}));
-        state.suggestionHistory.push(...state.suggestions.map(r=>r.name));
-        state.suggestionHistory=state.suggestionHistory.slice(-24);
-        setAIStatus('online');
-        renderSuggestions();
-        return;
-      }catch(err){
-        console.warn('Lume AI fallback:',err);
-      }
-    }
-
-    // 3) Fallback local: a app continua útil offline ou se uma API falhar.
-    toast('Não consegui pesquisar receitas agora. Usei as sugestões locais.');
+    // 2) Fallback local português/mediterrânico: nunca troca de universo culinário só para preencher cartões.
+    toast('Não encontrei 3 opções portuguesas/mediterrânicas na web. Usei alternativas locais desse perfil.');
     setAIStatus('local');
     const q=normalize(state.protein);
     const matched=db.filter(r=>r.keys.some(k=>q.includes(normalize(k))||normalize(k).includes(q)));
@@ -192,7 +176,7 @@ function renderSuggestions(){
   host.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
-function recipeCard(r,i){const source=(r.source==='web'||r.source==='retrieved')?`Receita real · ${esc(r.sourceName||'fonte externa')}`:(r.source==='ai'?'Adaptada pela IA do Lume':'Sugestão local do Lume');return `<article class="card recipe-card">${r.image?`<img class="recipe-image" src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`:''}<span class="recipe-number">IDEIA 0${i+1}</span><h3>${esc(r.name)}</h3><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">≈ ${r.time} min</span><span class="pill">${r.effort==='simple'?'Simples':'Normal'}</span><span class="pill">${esc(r.style)}</span></div><div class="recipe-actions"><button class="primary" data-pick="${r.id}">Vou fazer esta</button><button class="ghost" data-open="${r.id}">Ver receita</button><button class="ghost" data-more="1">Outras ideias</button></div><div class="source-note">${source}</div></article>`}
+function recipeCard(r,i){const source=(r.source==='web'||r.source==='retrieved'||r.source==='direct')?`Receita real · ${esc(r.sourceName||'fonte portuguesa')}`:(r.source==='ai'?'Adaptada pela IA do Lume':'Sugestão local do Lume');return `<article class="card recipe-card">${r.image?`<img class="recipe-image" src="${esc(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`:''}<span class="recipe-number">IDEIA 0${i+1}</span><h3>${esc(r.name)}</h3><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">≈ ${r.time} min</span><span class="pill">${r.effort==='simple'?'Simples':'Normal'}</span><span class="pill">${esc(r.style)}</span></div><div class="recipe-actions"><button class="primary" data-pick="${r.id}">Vou fazer esta</button><button class="ghost" data-open="${r.id}">Ver receita</button><button class="ghost" data-more="1">Outras ideias</button></div><div class="source-note">${source}</div></article>`}
 
 function openRecipe(id,chosen=false){
   const r=state.suggestions.find(x=>x.id===id)||state.favorites.find(x=>x.id===id)?.recipe||state.history.find(x=>x.recipe.id===id)?.recipe;
@@ -201,7 +185,7 @@ function openRecipe(id,chosen=false){
   app.innerHTML=`<button id="backToday" class="ghost small">← Voltar</button><section class="hero"><div class="eyebrow">${chosen?'Escolhida para hoje':'Receita'}</div><h1>${esc(r.name)}</h1><p class="sub">${esc(r.side)}</p><div class="recipe-meta"><span class="pill">${r.time} min</span><span class="pill">Para 5</span><span class="pill">${esc(r.style)}</span></div></section>
   <section class="card"><h3>Ingredientes</h3><ul class="ingredients">${r.ingredients.map(([a,b])=>`<li><span>${esc(a)}</span><b>${esc(b)}</b></li>`).join('')}</ul>${state.ingredients?`<div class="adapt" style="margin-top:14px">Vou privilegiar o que disseste que tens: <b>${esc(state.ingredients)}</b>. Se algo da lista faltar, usa as substituições abaixo.</div>`:''}</section>
   <section class="card"><h3>Como fazer</h3><ol class="steps">${r.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol><div class="divider"></div><h3>Se faltar alguma coisa</h3>${r.adapt.map(a=>`<div class="adapt" style="margin-top:8px">${esc(a)}</div>`).join('')}</section>
-  ${(r.source==='web'||r.source==='retrieved')&&r.sourceUrl?`<section class="card source-card"><div><div class="eyebrow">Fonte original</div><h3>${esc(r.sourceName||'Receita na Internet')}</h3><p class="sub">O Lume encontrou esta receita na web. Ingredientes e dados essenciais são usados para seleção; a preparação completa permanece na fonte original.</p></div><a class="ghost source-link" href="${esc(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">Abrir fonte ↗</a></section>`:''}<section class="card"><h3>Depois do jantar</h3><p class="sub" style="margin-bottom:13px">O Lume aprende com a família. Como correu?</p><div class="feedback">${[[4,'😍','Adorámos'],[3,'🙂','Gostámos'],[2,'😐','Assim-assim'],[1,'👎','Não repetir']].map(([v,e,l])=>`<button data-rate="${v}">${e}<small>${l}</small></button>`).join('')}</div></section>`;
+  ${(r.source==='web'||r.source==='retrieved'||r.source==='direct')&&r.sourceUrl?`<section class="card source-card"><div><div class="eyebrow">Fonte original</div><h3>${esc(r.sourceName||'Receita na Internet')}</h3><p class="sub">O Lume encontrou esta receita diretamente numa fonte portuguesa. A preparação completa permanece na fonte original.</p></div><a class="ghost source-link" href="${esc(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">Abrir fonte ↗</a></section>`:''}<section class="card"><h3>Depois do jantar</h3><p class="sub" style="margin-bottom:13px">O Lume aprende com a família. Como correu?</p><div class="feedback">${[[4,'😍','Adorámos'],[3,'🙂','Gostámos'],[2,'😐','Assim-assim'],[1,'👎','Não repetir']].map(([v,e,l])=>`<button data-rate="${v}">${e}<small>${l}</small></button>`).join('')}</div></section>`;
   $('#backToday').onclick=()=>route('today');
   document.querySelectorAll('[data-rate]').forEach(b=>b.onclick=()=>saveFeedback(r,+b.dataset.rate));
 }

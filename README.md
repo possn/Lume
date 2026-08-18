@@ -1,59 +1,38 @@
-# Lume v0.4.0 — Web Retrieval
+# Lume v0.5.0 — Direct Portuguese Sources
 
-PWA familiar para escolher refeições. A fonte principal deixa de ser uma base fechada: o Lume pesquisa receitas reais na web.
+PWA mobile-first para sugestões de refeições familiares.
 
-## Arquitetura
+## O que mudou
 
-GitHub Pages (PWA) → Cloudflare Worker → Brave Search API → páginas de receitas → Schema.org `Recipe` JSON-LD.
+- O caminho principal deixou de precisar de Cloudflare Worker, Brave Search ou TheMealDB.
+- `providers.js` contém um registo de fontes culinárias portuguesas.
+- O browser tenta pesquisar diretamente cada fonte através de endpoints públicos (WordPress REST ou feeds Blogger).
+- Cada fonte é testada em runtime. Se bloquear CORS, tiver o endpoint desligado ou mudar de tecnologia, é ignorada sem bloquear o Lume.
+- O ranking privilegia explicitamente cozinha portuguesa e rejeita títulos claramente fora do perfil culinário definido.
+- Se menos de três fontes diretas responderem com resultados úteis, o Lume mantém o fallback local português/mediterrânico existente.
 
-O Worker procura a web, abre resultados de receitas e recolhe dados estruturados como título, imagem, tempo e ingredientes. A preparação integral continua na fonte original; o Lume mostra um botão para a abrir. Isto evita transformar a app num republicador de textos de terceiros.
+## Fontes candidatas iniciais
 
-Se o Worker não estiver configurado ou não devolver 3 resultados, o Lume usa TheMealDB apenas como fallback e, em último caso, o catálogo local.
+Teleculinária, Cozinha à la Carte, Tuga na Cozinha, Cinco Quartos de Laranja, Petiscos, Receitas e Menus, Clara de Sousa, SaborIntenso e blogs culinários portugueses em Blogger.
 
-## 1. Publicar a PWA no GitHub Pages
+Isto é um registry, não uma lista fechada. Acrescentar uma fonte compatível é apenas adicionar uma entrada em `providers.js`.
 
-Coloque na raiz do repositório:
-- index.html
-- styles.css
-- app.js
-- retrieval-client.js
-- ai-client.js
-- config.js
-- manifest.webmanifest
-- sw.js
-- icons/
-- .github/workflows/pages.yml (se já existir da v0.2.1, mantenha-o)
-- .nojekyll (se já existir, mantenha-o)
+## Nota técnica importante
 
-## 2. Criar o Worker de pesquisa
+Uma página pública não implica permissão de CORS. Por isso a compatibilidade é deliberadamente testada no próprio dispositivo em cada execução. Não há chaves API no frontend.
 
-Na pasta `worker/`:
-1. copie `wrangler.toml.example` para `wrangler.toml`;
-2. altere `ALLOWED_ORIGIN` para a origem do GitHub Pages, por exemplo `https://utilizador.github.io`;
-3. crie uma chave na Brave Search API;
-4. guarde-a como secret: `npx wrangler secret put BRAVE_SEARCH_API_KEY`;
-5. publique: `npx wrangler deploy`.
+## GitHub Pages
 
-## 3. Ligar a PWA ao Worker
-
-Em `config.js` coloque apenas o URL público do Worker em `RETRIEVAL_ENDPOINT`, por exemplo:
-
-```js
-RETRIEVAL_ENDPOINT: 'https://lume-search.<conta>.workers.dev',
-```
-
-Nunca coloque `BRAVE_SEARCH_API_KEY` no GitHub.
-
-## Como funciona “Outras ideias”
-
-Cada novo pedido muda `variationSeed` e envia `avoidRecipes`. O Worker altera a pesquisa, elimina títulos já mostrados e volta a ranquear os resultados por tempo, método, ingredientes disponíveis e perfil familiar.
+Publicar todos os ficheiros na raiz do repositório. `index.html` deve estar na raiz. O service worker usa o cache `lume-v0.5.0-direct-portuguese-sources`.
 
 ## Ficheiros alterados nesta versão
 
-- retrieval-client.js
-- config.js
-- app.js
-- sw.js
-- worker/worker.js
-- worker/wrangler.toml.example
-- README.md
+- `index.html`
+- `config.js`
+- `providers.js` (novo)
+- `retrieval-client.js`
+- `app.js`
+- `sw.js`
+- `README.md`
+
+O diretório `worker/` fica apenas como legado/opção futura e não é necessário para o modo direto da v0.5.0.

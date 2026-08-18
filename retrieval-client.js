@@ -1,147 +1,103 @@
 (function(){
-  const MEALDB='https://www.themealdb.com/api/json/v1/1';
+  const badCuisine=/\b(kentucky|kfc|tex[- ]?mex|mexican|mexicano|indian|indiano|chinese|chines|thai|tailandes|japanese|japones|korean|coreano|cajun|buffalo|teriyaki|tikka|curry|caril|ramen|taco|burrito)\b/i;
+  const strip=s=>String(s||'').replace(/<[^>]*>/g,' ').replace(/&nbsp;|&#160;/g,' ').replace(/&amp;/g,'&').replace(/&#8211;|&ndash;/g,'–').replace(/&#8217;|&rsquo;/g,"'").replace(/\s+/g,' ').trim();
+  const norm=s=>strip(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const tokens=s=>norm(s).split(/[^a-z0-9]+/).filter(x=>x.length>2);
+  const timeoutFetch=async(url,ms=8000)=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);try{const r=await fetch(url,{signal:c.signal,mode:'cors',headers:{Accept:'application/json'}});if(!r.ok)throw new Error(`HTTP_${r.status}`);return await r.json()}finally{clearTimeout(t)}};
 
-  const ALIASES=[
-    [/\b(peru|bifes? de peru|peito de peru)\b/i,'turkey'],
-    [/\b(frango|peito de frango|coxas? de frango)\b/i,'chicken'],
-    [/\b(salm[aã]o)\b/i,'salmon'],
-    [/\b(bacalhau|pescada|peixe branco|peixe)\b/i,'cod'],
-    [/\b(atum)\b/i,'tuna'],
-    [/\b(camar[aã]o|gambas?)\b/i,'prawns'],
-    [/\b(vaca|carne de vaca|carne picada|hamb[uú]rguer)\b/i,'beef'],
-    [/\b(porco|lombo|bifanas?)\b/i,'pork'],
-    [/\b(borrego|cordeiro)\b/i,'lamb'],
-    [/\b(ovos?|omelete)\b/i,'egg']
-  ];
-
-  function endpoint(){
-    return (window.LUME_CONFIG?.RETRIEVAL_ENDPOINT||'').replace(/\/$/,'');
+  function queries(input){
+    const p=(input.protein||'').trim();
+    const ing=(input.availableIngredients||'').trim();
+    const method={oven:'forno',pan:'frigideira',grill:'grelhado',airfryer:'air fryer',any:''}[input.method]||'';
+    const qs=[p, `${p} receita`, `${p} ${method}`.trim(), `${p} fácil`, `${p} saudável`];
+    if(ing) qs.unshift(`${p} ${ing.split(',').slice(0,2).join(' ')}`);
+    return [...new Set(qs.filter(Boolean))].slice(0,5);
   }
 
-  async function postJSON(url,payload,timeout=18000){
-    const ctl=new AbortController();
-    const timer=setTimeout(()=>ctl.abort(),timeout);
-    try{
-      const r=await fetch(url,{method:'POST',signal:ctl.signal,headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});
-      if(!r.ok)throw new Error(`RETRIEVAL_HTTP_${r.status}`);
-      return await r.json();
-    } finally {clearTimeout(timer)}
+  async function wpSearch(provider,q,input){
+    const per=Math.min(10,window.LUME_CONFIG?.MAX_PROVIDER_RESULTS||8);
+    const url=`${provider.base}/wp-json/wp/v2/search?search=${encodeURIComponent(q)}&per_page=${per}&subtype=post`;
+    const rows=await timeoutFetch(url,window.LUME_CONFIG?.RETRIEVAL_TIMEOUT_MS||9000);
+    if(!Array.isArray(rows)) return [];
+    const wanted=tokens(input.protein);
+    return rows.map((r,i)=>{
+      const title=strip(r.title||'');
+      if(!title||badCuisine.test(norm(title)))return null;
+      const hit=wanted.some(t=>norm(title).includes(t));
+      return {
+        externalId:`${provider.id}:${r.id||r.url}`,
+        name:title,
+        style:'Português', cuisineTier:'portuguese', time:Number(input.timeMinutes)||35,
+        effort:input.effort==='normal'?'normal':'simple', methods:[input.method&&input.method!=='any'?input.method:'pan'],
+        side:hit?'Receita portuguesa encontrada para o ingrediente principal':'Receita portuguesa encontrada pelo Lume',
+        ingredients:[], steps:['Abrir a receita original para consultar ingredientes, quantidades e preparação completa.'],
+        adapt:['Se faltar algum ingrediente, o Lume pode procurar outra receita com o que tens em casa.'], image:'',
+        source:'direct', sourceName:provider.name, sourceUrl:r.url||provider.base, providerId:provider.id,
+        sourceDescription:'Resultado obtido diretamente da fonte portuguesa.',
+        _score:provider.priority+(hit?35:0)-i*2
+      };
+    }).filter(Boolean);
   }
 
-  async function getJSON(url,timeout=9000){
-    const ctl=new AbortController();
-    const timer=setTimeout(()=>ctl.abort(),timeout);
-    try{
-      const r=await fetch(url,{signal:ctl.signal,headers:{'Accept':'application/json'}});
-      if(!r.ok)throw new Error(`RETRIEVAL_HTTP_${r.status}`);
-      return await r.json();
-    } finally {clearTimeout(timer)}
+  async function bloggerSearch(provider,q,input){
+    // Blogger JSON feeds often support callback/JSONP but not reliable fetch CORS. Probe JSON feed; skip cleanly on failure.
+    const url=`${provider.base}/feeds/posts/default?alt=json&q=${encodeURIComponent(q)}&max-results=8`;
+    const data=await timeoutFetch(url,window.LUME_CONFIG?.RETRIEVAL_TIMEOUT_MS||9000);
+    const entries=data?.feed?.entry||[];
+    return entries.map((e,i)=>{
+      const title=strip(e.title?.$t||''); if(!title||badCuisine.test(norm(title)))return null;
+      const href=(e.link||[]).find(x=>x.rel==='alternate')?.href||provider.base;
+      return {externalId:`${provider.id}:${e.id?.$t||href}`,name:title,style:'Português',cuisineTier:'portuguese',time:Number(input.timeMinutes)||35,effort:input.effort==='normal'?'normal':'simple',methods:[input.method&&input.method!=='any'?input.method:'pan'],side:'Receita portuguesa encontrada pelo Lume',ingredients:[],steps:['Abrir a receita original para consultar a preparação completa.'],adapt:['Se faltar algum ingrediente, pede outras ideias com os ingredientes disponíveis.'],image:'',source:'direct',sourceName:provider.name,sourceUrl:href,providerId:provider.id,sourceDescription:'Resultado obtido diretamente da fonte portuguesa.',_score:provider.priority-i*2};
+    }).filter(Boolean);
   }
 
-  function ingredientFor(text){
-    const q=(text||'').trim();
-    const hit=ALIASES.find(([re])=>re.test(q));
-    return hit?hit[1]:q.toLowerCase().replace(/\s+/g,'_');
-  }
-
-  function normalizeWebRecipe(r){
-    return {
-      externalId:r.externalId||r.sourceUrl||r.name,
-      name:r.name||'Receita encontrada',
-      originalName:r.name||'',
-      style:r.style||'Receita da web',
-      time:Number(r.time)||35,
-      effort:r.effort==='normal'?'normal':'simple',
-      methods:Array.isArray(r.methods)&&r.methods.length?r.methods:['pan','oven'],
-      side:r.side||'O Lume encontrou esta receita na web',
-      ingredients:Array.isArray(r.ingredients)?r.ingredients:[],
-      steps:Array.isArray(r.steps)&&r.steps.length?r.steps:['Consulta a fonte original para seguir a preparação completa.'],
-      adapt:Array.isArray(r.adapt)?r.adapt:[],
-      image:r.image||'',
-      source:'web',
-      sourceName:r.sourceName||'Web',
-      sourceUrl:r.sourceUrl||'',
-      sourceDescription:r.sourceDescription||''
-    };
-  }
-
-  async function suggestFromWeb(input){
-    const base=endpoint();
-    if(!base)throw new Error('WEB_RETRIEVAL_NOT_CONFIGURED');
-    const data=await postJSON(`${base}/v1/retrieve`,input,window.LUME_CONFIG?.RETRIEVAL_TIMEOUT_MS||22000);
-    const recipes=Array.isArray(data?.recipes)?data.recipes.map(normalizeWebRecipe):[];
-    if(recipes.length<3)throw new Error('WEB_RETRIEVAL_TOO_FEW_RESULTS');
-    return recipes.slice(0,3);
-  }
-
-  // TheMealDB remains only as a no-key fallback when the web search gateway is unavailable.
-  function mealIngredients(meal){
-    const out=[];
-    for(let i=1;i<=20;i++){
-      const name=(meal[`strIngredient${i}`]||'').trim();
-      const amount=(meal[`strMeasure${i}`]||'').trim();
-      if(name)out.push([name,amount||'q.b.']);
+  async function searchProvider(provider,input){
+    const qs=queries(input);
+    let all=[];
+    for(const q of qs.slice(0,3)){
+      try{
+        const got=provider.type==='blogger'?await bloggerSearch(provider,q,input):await wpSearch(provider,q,input);
+        all.push(...got);
+        if(all.length>=5)break;
+      }catch(e){
+        // CORS, unavailable endpoint or non-compatible source: skip this provider.
+        throw e;
+      }
     }
-    return out;
+    return all;
   }
-  function inferMethods(meal){
-    const text=`${meal.strMeal||''} ${meal.strInstructions||''}`.toLowerCase();
-    const methods=[];
-    if(/oven|bake|roast/.test(text))methods.push('oven');
-    if(/grill|barbecue|bbq/.test(text))methods.push('grill');
-    if(/fry|pan|skillet|saut/.test(text))methods.push('pan');
-    if(/air\s*fry/.test(text))methods.push('airfryer');
-    return methods.length?methods:['pan','oven'];
-  }
-  function inferTime(meal){
-    const text=(meal.strInstructions||'').toLowerCase();
-    const mins=[...text.matchAll(/(\d{1,3})\s*(?:minutes?|mins?)/g)].map(m=>Number(m[1])).filter(n=>n>0&&n<240);
-    if(mins.length)return Math.min(90,Math.max(15,mins.reduce((a,b)=>a+b,0)));
-    return /slow|simmer|roast/.test(text)?45:35;
-  }
-  function splitSteps(text){
-    const clean=(text||'').replace(/\r/g,'\n').replace(/\n{2,}/g,'\n').trim();
-    let parts=clean.split(/\n+/).map(s=>s.trim()).filter(Boolean);
-    if(parts.length<2)parts=clean.split(/(?<=[.!?])\s+(?=[A-Z])/).map(s=>s.trim()).filter(Boolean);
-    return parts.slice(0,10);
-  }
-  function toMealRecipe(meal){
-    return {
-      externalId:meal.idMeal,name:meal.strMeal||'Receita',originalName:meal.strMeal||'',style:meal.strArea||meal.strCategory||'Receita real',
-      time:inferTime(meal),effort:(meal.strInstructions||'').length>900?'normal':'simple',methods:inferMethods(meal),
-      side:'Receita completa da fonte original',ingredients:mealIngredients(meal),steps:splitSteps(meal.strInstructions),
-      adapt:['Se faltar um ingrediente secundário, usa um equivalente que tenhas em casa.'],image:meal.strMealThumb||'',source:'retrieved',
-      sourceName:'TheMealDB · fallback',sourceUrl:meal.strSource||meal.strYoutube||`https://www.themealdb.com/meal/${meal.idMeal}`
-    };
-  }
-  async function suggestFromMealDB(input){
-    const ingredient=ingredientFor(input.protein);
-    const filter=await getJSON(`${MEALDB}/filter.php?i=${encodeURIComponent(ingredient)}`);
-    let candidates=Array.isArray(filter.meals)?filter.meals:[];
-    if(!candidates.length){
-      const search=await getJSON(`${MEALDB}/search.php?s=${encodeURIComponent(ingredient.replace(/_/g,' '))}`);
-      candidates=Array.isArray(search.meals)?search.meals:[];
-    }
-    if(!candidates.length)throw new Error('MEALDB_NO_RESULTS');
-    const avoid=new Set((input.avoidRecipes||[]).map(x=>String(x).toLowerCase()));
-    let pool=candidates.filter(m=>!avoid.has(String(m.strMeal||'').toLowerCase()));
-    if(pool.length<3)pool=candidates;
-    const seed=Number(input.variationSeed||0);
-    pool=pool.slice().sort((a,b)=>((Number(a.idMeal||0)+seed*37)%997)-((Number(b.idMeal||0)+seed*37)%997));
-    const full=(await Promise.all(pool.slice(0,9).map(async m=>{
-      try{const d=await getJSON(`${MEALDB}/lookup.php?i=${encodeURIComponent(m.idMeal)}`);return d.meals?.[0]||null}catch{return null}
-    }))).filter(Boolean).map(toMealRecipe);
-    if(full.length<3)throw new Error('MEALDB_TOO_FEW_RESULTS');
-    return full.slice(0,3);
+
+  function deDupeRank(rows,input){
+    const avoid=(input.avoidRecipes||[]).map(norm);
+    const seen=new Set();
+    return rows.filter(r=>{
+      const k=norm(r.name); if(!k||seen.has(k))return false; seen.add(k);
+      if(avoid.some(a=>a&& (k.includes(a)||a.includes(k)))) r._score-=70;
+      return true;
+    }).sort((a,b)=>(b._score||0)-(a._score||0));
   }
 
   async function suggest(input){
-    try{return await suggestFromWeb(input)}
-    catch(err){
-      console.warn('Lume web retrieval fallback:',err);
-      return suggestFromMealDB(input);
+    const providers=(window.LUME_PROVIDERS||[]).slice().sort((a,b)=>b.priority-a.priority);
+    if(!providers.length)throw new Error('NO_DIRECT_PROVIDERS');
+    const results=[]; const status=[];
+    // Batches keep mobile latency bounded while still aggregating several independent sites.
+    for(let i=0;i<providers.length;i+=4){
+      const batch=providers.slice(i,i+4);
+      const settled=await Promise.allSettled(batch.map(p=>searchProvider(p,input)));
+      settled.forEach((s,j)=>{
+        const p=batch[j];
+        if(s.status==='fulfilled'){status.push({id:p.id,name:p.name,ok:true,count:s.value.length});results.push(...s.value)}
+        else status.push({id:p.id,name:p.name,ok:false,count:0});
+      });
+      const ranked=deDupeRank(results,input);
+      if(ranked.filter(r=>!((input.avoidRecipes||[]).map(norm).includes(norm(r.name)))).length>=6)break;
     }
+    window.dispatchEvent(new CustomEvent('lume:provider-status',{detail:status}));
+    const ranked=deDupeRank(results,input);
+    if(ranked.length<3){const err=new Error('DIRECT_SOURCES_INSUFFICIENT');err.providerStatus=status;throw err;}
+    return ranked.slice(0,3);
   }
 
-  window.LumeRetrieval={suggest,ingredientFor,isWebConfigured:()=>!!endpoint()};
+  window.LumeRetrieval={suggest,isWebConfigured:()=>true,providers:()=>window.LUME_PROVIDERS||[]};
 })();
